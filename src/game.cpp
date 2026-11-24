@@ -414,10 +414,12 @@ void Game::update(const Input& in, float dt) {
     Skater& s = this->s;
     if (getenv("SKATE_DEBUGPOS")) {           // dev aid: dump state ~2x/sec
         static int dbg = 0;
+        static float fpsEma = 120.f;
+        if (dt > 1e-5f) fpsEma += (1.f / dt - fpsEma) * 0.05f;   // smoothed: raw 1/dt jitters wildly frame to frame
         if (++dbg % 30 == 0)
             fprintf(stderr, "POS %.1f %.1f %.1f st%d spd %.1f yaw %.2f sup %.2f fps %.0f\n",
                     s.pos.x, s.pos.y, s.pos.z, (int)s.state, s.speed, s.yaw,
-                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y), 1.f / dt);
+                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y), fpsEma);
     }
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
