@@ -481,7 +481,9 @@ void Game::update(const Input& in, float dt) {
         // a landed 180 until you carve back around). Braking into a hard carve
         // breaks traction: a powerslide — board swings out, speed bleeds fast.
         bool sliding = in.brake && std::abs(steer) > 0.5f && s.speed > 3.f;
+        // tic-tac: near-standstill carving pivots on the back truck instead
         float yawRate = steer * (1.6f + s.speed * 0.12f) * (sliding ? 1.9f : 1.f);
+        if (s.speed < 1.2f) yawRate = steer * 3.2f;
         s.yaw += yawRate * dt;
         bool fakie = false;
         if (s.speed > 0.4f) {
