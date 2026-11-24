@@ -72,6 +72,8 @@ struct Skater {
     bool grindBoardslide = false;
     int grindType = 0;      // 0=50-50 1=boardslide 2=smith 3=crooked 4=lipslide
     int manualDir = 0;      // +1 manual (back trucks), -1 nose manual
+    float revertT = 0;      // post-landing pivot
+    int revertDir = 0;
     // bail
     float bailT = 0;
     std::string bailText;
@@ -112,7 +114,7 @@ struct Game {
     void tryGrind(float steer);
     void endGrind(bool popOut);
     void bail(const char* text);
-    void land(bool bankLine = true);
+    void land(bool bankLine = true, float steer = 0.f);
     void endManual();
     void score(int pts, const char* name);
     void setMarkerHere();

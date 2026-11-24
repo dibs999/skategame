@@ -274,7 +274,7 @@ void Game::endManual() {
     if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
 }
 
-void Game::land(bool bankLine) {
+void Game::land(bool bankLine, float steer) {
     float impact = -s.vel.y;
     bool bad = (s.flip != F_NONE && s.flipPhase < 0.8f);
     bool upsideDown = std::fmod(std::abs(s.boardRoll), 6.28f) > 2.2f &&
@@ -313,6 +313,12 @@ void Game::land(bool bankLine) {
         score(120 * std::abs(spins), buf);
     }
     if (s.airTime > 0.5f && s.trickName.empty()) score(50, "OLLIE");
+    // holding steer through landing = revert pivot, keeps the line alive
+    if (steer != 0.f && s.speed > 1.f) {
+        s.revertDir = steer > 0.f ? 1 : -1;
+        s.revertT = 0.68f;
+        bankLine = false;
+    }
     // bank the line
     if (bankLine && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
 }
@@ -395,6 +401,12 @@ void Game::update(const Input& in, float dt) {
             doOllie(in.jump ? 0.55f : s.crouch);
             s.crouch = 0;
             break;
+        }
+        // revert pivot: quick 180 on the wheels after landing with steer held
+        if (s.revertT > 0.f) {
+            s.yaw += s.revertDir * 4.6f * dt;   // ~180 over the window
+            s.revertT -= dt;
+            if (s.revertT <= 0.f) { s.revertDir = 0; score(40, "REVERT"); }
         }
         // manual entry while rolling
         if ((in.manual || in.noseManual) && s.speed > 1.f) {
@@ -543,7 +555,7 @@ void Game::update(const Input& in, float dt) {
             if (s.pos.y <= ground + 0.02f) {
                 // landing into a held manual keeps the line alive
                 if (in.manual || in.noseManual) {
-                    land(false);
+                    land(false, steer);
                     if (s.state == S_GROUND) {
                         s.manualDir = in.noseManual ? -1 : 1;
                         s.state = S_MANUAL;
@@ -552,7 +564,7 @@ void Game::update(const Input& in, float dt) {
                         s.trickT = 1.2f;
                     }
                 } else {
-                    land();
+                    land(true, steer);
                 }
             }
         }
