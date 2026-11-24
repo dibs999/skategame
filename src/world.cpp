@@ -431,9 +431,13 @@ void World::build(const TexSet& tex) {
         m.box({-2, 0.45f, 14}, {2, 0.45f, 2});
         m.box({-20.1f, 0.21f, 20}, {1.1f, 0.21f, 0.4f});
         m.box({8.1f, 0.21f, 30}, {1.1f, 0.21f, 0.4f});
-        for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
-            m.cylinder({p.x, 0, p.y}, {p.x, 0.55f, p.y}, 1.1f, 20);
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
+        // terracotta planters: warm color accents against the grey concrete
+        auto& pl = cx.mb();
+        pl.setColor({1, 1, 1});
+        for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
+            pl.cylinder({p.x, 0, p.y}, {p.x, 0.55f, p.y}, 1.1f, 20);
+        cx.add(pl, {tex.concrete, 0.5f, {0.72f, 0.38f, 0.25f}, 0.15f, 24.f, 1.f, 0.f, 0.f});
     }
     // parked cars on the asphalt lot
     {
