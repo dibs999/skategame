@@ -105,10 +105,10 @@ struct MeshBuilder {
     // Quarter-pipe transition: arc of radius R starting at (ox, oy) rising along +dir,
     // spanning width w along the other axis. 'segs' subdivisions.
     void quarterPipe(const Vec3& org, const Vec3& dir, float width, float R,
-                     int segs = 14, bool vertWall = true) {
+                     int segs = 14, bool vertWall = true, float arc = -1.f) {
         Vec3 side = dir.cross({0,1,0}).normalized() * -1.f; // perpendicular, horizontal
         Vec3 prev[2];
-        float arcEnd = vertWall ? 1.5707f : 1.35f;
+        float arcEnd = arc > 0 ? arc : (vertWall ? 1.5707f : 1.35f);
         for (int i = 0; i <= segs; i++) {
             float t = i / (float)segs * arcEnd;
             Vec3 p = org + dir * (R * std::sin(t)) + Vec3(0, R - R * std::cos(t), 0);
