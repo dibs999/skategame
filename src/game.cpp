@@ -430,6 +430,11 @@ void Game::update(const Input& in, float dt) {
         Vec3 g(0, -GRAV, 0);
         Vec3 a = g - n * g.dot(n);           // gravity along surface
         s.vel += a * dt;
+        // pumping: holding crouch while climbing a transition adds speed
+        if (s.crouch > 0.5f && s.speed > 0.5f) {
+            float up = -(f.x * n.x + f.z * n.z) / std::max(n.y, 0.3f);
+            if (up > 0.05f) s.vel += f * std::min(up, 1.5f) * 1.6f * dt;
+        }
         float fr = 0.4f + scrub;
         if (in.brake) fr += 3.0f;
         s.vel.x -= s.vel.x * fr * dt;
