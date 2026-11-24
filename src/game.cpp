@@ -81,8 +81,8 @@ void Game::init(const TexSet& t) {
     if (FILE* f = fopen(bestPath(), "r")) { if (fscanf(f, "%d", &s.bestScore) != 1) s.bestScore = 0; fclose(f); }
     world.build(t);
     // skater/board meshes
-    { MeshBuilder m; m.setColor({1,1,1}); m.capsule({0,-0.5f,0},{0,0.5f,0},0.5f,10); mCapsule = m.build(); }
-    { MeshBuilder m; m.setColor({1,1,1}); m.sphere({0,0,0},1.f,12,8); mSphere = m.build(); }
+    { MeshBuilder m; m.setColor({1,1,1}); m.capsule({0,-0.5f,0},{0,0.5f,0},0.5f,20); mCapsule = m.build(); }
+    { MeshBuilder m; m.setColor({1,1,1}); m.sphere({0,0,0},1.f,22,16); mSphere = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.box({0,0,0},{0.5f,0.5f,0.5f}); mBox = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.deck(0.82f, 0.215f, 0.02f, 0.035f); mDeck = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.deck(0.82f, 0.205f, 0.006f, 0.037f); mDeckTop = m.build(); }
@@ -954,6 +954,10 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     out.push_back({&mCapsule, capsuleXform(elbL, handL, 0.045f), skin});
     out.push_back({&mCapsule, capsuleXform(shoR, elbR, 0.055f), shirt});
     out.push_back({&mCapsule, capsuleXform(elbR, handR, 0.045f), skin});
+    for (int hd = 0; hd < 2; hd++) {
+        Vec3 hp = hd == 0 ? handL : handR;
+        out.push_back({&mSphere, Mat4::mul(Mat4::translation(hp), Mat4::scale({0.052f, 0.06f, 0.045f})), skin});
+    }
 
     // bail: draw loose board separately
     if (s.state == S_BAIL) drawBoard(out, bm, true);

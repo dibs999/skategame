@@ -47,7 +47,7 @@ struct MeshBuilder {
         }
     }
 
-    void cylinder(const Vec3& a, const Vec3& b, float r, int seg = 12, bool caps = true) {
+    void cylinder(const Vec3& a, const Vec3& b, float r, int seg = 18, bool caps = true) {
         Vec3 ax = (b - a).normalized();
         Vec3 t = (std::abs(ax.y) < 0.9f) ? ax.cross({0,1,0}).normalized()
                                        : ax.cross({1,0,0}).normalized();
@@ -79,7 +79,7 @@ struct MeshBuilder {
         }
     }
 
-    void sphere(const Vec3& c, float r, int seg = 12, int rings = 8) {
+    void sphere(const Vec3& c, float r, int seg = 20, int rings = 14) {
         unsigned b0 = (unsigned)v.size();
         for (int j = 0; j <= rings; j++) {
             float ph = j / (float)rings * 3.14159265f;
@@ -96,7 +96,7 @@ struct MeshBuilder {
             }
     }
 
-    void capsule(const Vec3& a, const Vec3& b, float r, int seg = 10) {
+    void capsule(const Vec3& a, const Vec3& b, float r, int seg = 18) {
         cylinder(a, b, r, seg, false);
         sphere(a, r, seg, 6);
         sphere(b, r, seg, 6);

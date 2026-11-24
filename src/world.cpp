@@ -380,20 +380,27 @@ void World::build(const TexSet& tex) {
     {
         auto addCar = [&](float cx0, float cz0, const Vec3& paint) {
             MeshBuilder m;
-            // body: low nose + trunk, tall mid
+            // stepped body: low hood + trunk, high mid belt, sunken glasshouse
             m.setColor(paint);
-            m.box({cx0, 0.32f, cz0 - 2.05f}, {0.86f, 0.42f, 2.05f});          // body shell
-            m.box({cx0, 0.74f, cz0}, {0.82f, 0.16f, 2.0f});                   // belt
-            m.setColor(paint * 0.5f + Vec3{0.05f, 0.07f, 0.09f});
-            m.box({cx0, 0.95f, cz0 + 0.1f}, {0.72f, 0.28f, 1.15f});           // glasshouse
+            m.box({cx0, 0.42f, cz0}, {0.84f, 0.26f, 2.0f});                   // main tub
+            m.box({cx0, 0.60f, cz0 - 1.45f}, {0.80f, 0.10f, 0.55f});          // hood
+            m.box({cx0, 0.58f, cz0 + 1.5f}, {0.80f, 0.12f, 0.5f});            // trunk deck
+            m.box({cx0, 0.68f, cz0}, {0.78f, 0.10f, 1.35f});                  // cabin floor/sill
+            m.setColor(paint * 0.45f + Vec3{0.04f, 0.06f, 0.08f});
+            m.box({cx0, 0.82f, cz0 + 0.05f}, {0.70f, 0.16f, 1.05f});          // glasshouse
+            m.setColor(paint);
+            m.box({cx0, 0.82f, cz0 - 1.02f}, {0.74f, 0.16f, 0.07f});          // windshield frame top
+            m.box({cx0, 0.86f, cz0 + 0.05f}, {0.72f, 0.06f, 0.9f});           // roof
             m.setColor({0.02f, 0.02f, 0.02f});
             for (int wsi = 0; wsi < 4; wsi++) {
                 float wx = cx0 + (wsi < 2 ? -0.78f : 0.78f);
                 float wz = cz0 + (wsi % 2 ? -1.35f : 1.35f);
-                m.cylinder({wx, 0.26f, wz - 0.13f}, {wx, 0.26f, wz + 0.13f}, 0.26f, 10);
+                m.cylinder({wx, 0.26f, wz - 0.14f}, {wx, 0.26f, wz + 0.14f}, 0.27f, 14);
             }
             m.setColor({0.9f, 0.9f, 0.95f});
-            m.box({cx0, 0.33f, cz0 - 2.06f}, {0.8f, 0.05f, 0.02f});           // headlights strip
+            m.box({cx0, 0.45f, cz0 - 2.02f}, {0.75f, 0.05f, 0.02f});          // headlights strip
+            m.setColor({0.5f, 0.06f, 0.04f});
+            m.box({cx0, 0.48f, cz0 + 2.02f}, {0.75f, 0.05f, 0.02f});          // taillights strip
             cx.add(m, {0, 1.f, {1, 1, 1}, 0.9f, 140.f, 0.9f, 0.35f, 0.f}, true);
             solids.push_back({{cx0 - 0.86f, 0, cz0 - 2.05f}, {cx0 + 0.86f, 1.05f, cz0 + 2.05f}});
         };
