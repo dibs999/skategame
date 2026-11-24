@@ -8,7 +8,7 @@
 #include <cstdlib>
 
 static const float GRAV = 12.5f;
-static const float PUSH_ACCEL = 4.2f, PUSH_CAP = 9.0f;
+static const float PUSH_ACCEL = 5.5f, PUSH_CAP = 10.5f;
 
 void Particles::emit(const Vec3& p, const Vec3& v, float life, float size,
                      const Vec3& c, int type) {
@@ -496,14 +496,14 @@ void Game::update(const Input& in, float dt) {
             float dv = std::remainder(s.yaw - vh, 6.2832f);
             fakie = std::abs(dv) > 1.5708f;
             if (!fakie) {
-                float follow = sliding ? 1.1f : 3.5f;
+                float follow = sliding ? 0.9f : 2.3f;
                 float a = vh + clampf(dv, -follow * dt, follow * dt);
                 s.vel.x = std::cos(a) * s.speed;
                 s.vel.z = std::sin(a) * s.speed;
             }
         }
         // pushing
-        if (in.push && s.pushAnim <= 0 && s.speed < PUSH_CAP) s.pushAnim = 0.75f;
+        if (in.push && s.pushAnim <= 0 && s.speed < PUSH_CAP) s.pushAnim = 0.6f;
         if (s.pushAnim > 0) s.vel += f * (PUSH_ACCEL * dt * (fakie ? -1.f : 1.f));
         s.lean = dampf(s.lean, steer * 0.5f, 8, dt);
         float scrub = std::abs(yawRate) * 0.05f;
