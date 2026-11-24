@@ -262,6 +262,7 @@ void Game::endGrind(bool popOut) {
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
         s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
     } else {
+        s.grindLockout = 0.5f;
         s.state = S_AIR;
         s.airTime = 0.15f;
         s.trickWindow = 0.3f;
@@ -434,7 +435,9 @@ void Game::update(const Input& in, float dt) {
         }
     }
     if (s.trickT <= 0) s.trickName.clear();
+    now += dt;
     s.popTimer = std::max(0.f, s.popTimer - dt);
+    s.grindLockout = std::max(0.f, s.grindLockout - dt);
     if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0 && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); } }
     shake = dampf(shake, 0, 6, dt);
     flash = dampf(flash, 0, 7, dt);
@@ -572,17 +575,29 @@ void Game::update(const Input& in, float dt) {
         s.vel.y -= GRAV * dt;
         // trick input
         if (s.flip == F_NONE) {
-            // opposite pairs first, then diagonals (Flick-It style)
-            if (in.trick[0] && in.trick[1]) startFlip(F_IMPOSSIBLE);
-            else if (in.trick[2] && in.trick[3]) startFlip(F_BIGSPIN);
-            else if (in.trick[0] && in.trick[2]) startFlip(F_VARIALKICK);
-            else if (in.trick[1] && in.trick[2]) startFlip(F_VARIALHEEL);
-            else if (in.trick[0] && in.trick[3]) startFlip(F_HARD);
-            else if (in.trick[1] && in.trick[3]) startFlip(F_INWARD);
-            else if (in.trick[0]) startFlip(F_KICK);
-            else if (in.trick[1]) startFlip(F_HEEL);
-            else if (in.trick[2]) startFlip(F_SHOVE);
-            else if (in.trick[3]) startFlip(F_TREFLIP);
+            // chord window: arrows pressed within 220ms of each other count as
+            // combos; a lone arrow waits 180ms for a partner before firing
+            for (int i = 0; i < 4; i++) {
+                if (in.trick[i] && s.arrowT[i] < 0) s.arrowT[i] = now;
+                if (!in.trick[i] && s.arrowT[i] >= 0 && now - s.arrowT[i] > 0.22f) s.arrowT[i] = -1;
+            }
+            auto act = [&](int i) { return s.arrowT[i] >= 0 && now - s.arrowT[i] <= 0.22f; };
+            bool L = act(0), R = act(1), D = act(2), U = act(3);
+            int n = (L?1:0) + (R?1:0) + (D?1:0) + (U?1:0);
+            int first = L ? 0 : R ? 1 : D ? 2 : 3;
+            Flip pick = F_NONE;
+            if (L && R) pick = F_IMPOSSIBLE;
+            else if (D && U) pick = F_BIGSPIN;
+            else if (L && D) pick = F_VARIALKICK;
+            else if (R && D) pick = F_VARIALHEEL;
+            else if (L && U) pick = F_HARD;
+            else if (R && U) pick = F_INWARD;
+            else if (n == 1 && now - s.arrowT[first] > 0.18f)
+                pick = first == 0 ? F_KICK : first == 1 ? F_HEEL : first == 2 ? F_SHOVE : F_TREFLIP;
+            if (pick != F_NONE) {
+                startFlip(pick);
+                for (int i = 0; i < 4; i++) s.arrowT[i] = -1;
+            }
         }
         // flip animation
         if (s.flip != F_NONE && s.flipPhase < 1.f) {
@@ -648,7 +663,7 @@ void Game::update(const Input& in, float dt) {
         // named gaps (Skate's gap list): fly through a zone once per air
         {
             static const struct { float x0, x1, z0, z1, y0; const char* name; int pts; } GAPS[] = {
-                { 73.f,  79.f,  30.f,  50.f, 2.5f, "MEGA GAP",      800},
+                { 80.f,  97.f,  30.f,  50.f, 1.2f, "MEGA GAP",      800},
                 { 15.5f, 24.5f, -6.f,   4.5f, 1.4f, "STAIR SET",     300},
                 { -6.f,   2.f,   12.f,  16.f, 1.7f, "OVER THE FUNBOX",200},
                 {-44.f, -24.f, -36.f, -16.f, 1.5f, "BOWL TRANSFER",  400},
@@ -672,7 +687,7 @@ void Game::update(const Input& in, float dt) {
             // pop, a long fall, or when actually traveling along the edge, so a
             // plain roll-off/drop-in doesn't lock onto coping
             int ge = world.findGrindEdge(s.pos);
-            if (ge >= 0 && s.pos.y < ground + 0.45f + 0.35f) {
+            if (ge >= 0 && s.grindLockout <= 0.f && s.pos.y < ground + 0.45f + 0.35f) {
                 auto& e = world.edges[ge];
                 Vec3 d = (e.b - e.a).normalized();
                 bool locked = s.popTimer > 0 || s.airTime > 0.4f ||

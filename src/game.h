@@ -69,6 +69,8 @@ struct Skater {
     float fallStart = 0;    // y at leaving ground
     // grind
     int grindEdge = -1;
+    float grindLockout = 0;   // no relock right after leaving an edge
+    float arrowT[4] = {-1, -1, -1, -1};  // first-press time per trick arrow
     float grindT = 0;       // param along edge
     float balance = 0;      // -1..1, |1| = bail
     float grindDist = 0;
@@ -114,6 +116,7 @@ struct Game {
     float markerYaw = 0;
     // camera fx
     float shake = 0, flash = 0;
+    float now = 0;              // game clock for input chord windows
     float fovBoost = 0;
     // skater/board meshes (built once)
     Mesh mCapsule, mSphere, mBox, mDeck, mDeckTop, mTruck, mWheel, mMarker, mFlag;
