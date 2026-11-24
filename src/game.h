@@ -56,6 +56,7 @@ struct Skater {
     // air/trick
     float airTime = 0;
     float trickWindow = 0;  // time after pop to register a flip
+    float spinAmt = 0;      // radians rotated during current air
     Flip flip = F_NONE;
     float flipPhase = 0;    // 0..1 progress of flip anim
     float boardRoll = 0, boardSpin = 0; // displayed flip angles

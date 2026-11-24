@@ -164,7 +164,7 @@ void Game::doOllie(float power) {
     s.trickWindow = 0.45f;
     s.fallStart = s.pos.y;
     s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-    s.grab = G_NONE;
+    s.grab = G_NONE; s.spinAmt = 0;
     s.popTimer = 0.18f;
     fx.dust(s.pos, 4, 0.5f);
 }
@@ -226,13 +226,14 @@ void Game::endGrind(bool popOut) {
         s.trickWindow = 0.35f;
         s.fallStart = s.pos.y;
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-        s.grab = G_NONE;
+        s.grab = G_NONE; s.spinAmt = 0;
     } else {
         s.state = S_AIR;
         s.airTime = 0.15f;
         s.trickWindow = 0.3f;
         s.fallStart = s.pos.y;
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+        s.spinAmt = 0;
     }
 }
 
@@ -271,6 +272,11 @@ void Game::land(bool bankLine) {
     if (bad) { bail("UNDER-ROTATED"); return; }
     if (upsideDown) { bail("LANDED PRIMO"); return; }
     if (impact > 17.f) { bail("SLAMMED HARD"); return; }
+    // air spins: nearest 180 counts; badly off-axis landings clip
+    float spinDeg = s.spinAmt * 57.2958f;
+    int spins = (int)std::lround(spinDeg / 180.f);
+    float resid = std::abs(spinDeg - spins * 180.f);
+    if (resid > 70.f && s.speed > 4.f) { bail("UNDER-ROTATED"); return; }
     s.state = S_GROUND;
     s.pos.y = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
     // landing on a downslope converts fall speed into forward speed
@@ -289,6 +295,13 @@ void Game::land(bool bankLine) {
     s.flip = F_NONE; s.grab = G_NONE;
     if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); g_audio.fire(AudioFx::LANDHARD); }
     else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); g_audio.fire(AudioFx::LAND); }
+    if (std::abs(spins) >= 1) {
+        char buf[80];
+        std::snprintf(buf, sizeof buf, "%s%s %d",
+                      s.trickName.empty() ? "" : (s.trickName + " ").c_str(),
+                      spins > 0 ? "FS" : "BS", std::abs(spins) * 180);
+        score(120 * std::abs(spins), buf);
+    }
     if (s.airTime > 0.5f && s.trickName.empty()) score(50, "OLLIE");
     // bank the line
     if (bankLine && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
@@ -360,12 +373,24 @@ void Game::update(const Input& in, float dt) {
             s.trickT = 1.2f;
             break;
         }
-        // pushing
-        if (in.push && s.pushAnim <= 0 && s.speed < PUSH_CAP) s.pushAnim = 0.75f;
-        if (s.pushAnim > 0) s.vel += f * (PUSH_ACCEL * dt);
-        // carving
+        // carving: heading turns, velocity follows the deck (rides fakie after
+        // a landed 180 until you carve back around)
         float yawRate = steer * (1.6f + s.speed * 0.12f);
         s.yaw += yawRate * dt;
+        bool fakie = false;
+        if (s.speed > 0.4f) {
+            float vh = std::atan2(s.vel.z, s.vel.x);
+            float dv = std::remainder(s.yaw - vh, 6.2832f);
+            fakie = std::abs(dv) > 1.5708f;
+            if (!fakie) {
+                float a = vh + clampf(dv, -3.5f * dt, 3.5f * dt);
+                s.vel.x = std::cos(a) * s.speed;
+                s.vel.z = std::sin(a) * s.speed;
+            }
+        }
+        // pushing
+        if (in.push && s.pushAnim <= 0 && s.speed < PUSH_CAP) s.pushAnim = 0.75f;
+        if (s.pushAnim > 0) s.vel += f * (PUSH_ACCEL * dt * (fakie ? -1.f : 1.f));
         s.lean = dampf(s.lean, steer * 0.5f, 8, dt);
         float scrub = std::abs(yawRate) * 0.05f;
         // friction + slope
@@ -399,7 +424,7 @@ void Game::update(const Input& in, float dt) {
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE;
+            s.grab = G_NONE; s.spinAmt = 0;
             break;
         }
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
@@ -415,7 +440,7 @@ void Game::update(const Input& in, float dt) {
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE;
+            s.grab = G_NONE; s.spinAmt = 0;
         } else {
             s.pos.y = ground;
         }
@@ -456,6 +481,9 @@ void Game::update(const Input& in, float dt) {
             s.trickName = gn; s.trickT = 0.4f;
             s.lineScore += (int)(70 * dt * s.mult);
         }
+        // aerial rotation (A/D): FS/BS 180s, 360s, ... scored at landing
+        s.yaw += steer * 4.4f * dt;
+        s.spinAmt += steer * 4.4f * dt;
         // move
         Vec3 np = s.pos + s.vel * dt;
         bool wall = world.collideWalls(np, s.vel);
