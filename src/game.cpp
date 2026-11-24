@@ -428,7 +428,14 @@ void Game::update(const Input& in, float dt) {
         bool released = prevCrouchKey > 0.5f && !in.crouch;
         prevCrouchKey = in.crouch ? 1 : 0;
         if ((released && s.crouch > 0.15f) || in.jump) {
-            doOllie(in.jump ? 0.55f : s.crouch);
+            if (in.jump && s.crouch > 0.35f) {
+                doOllie(std::min(1.f, s.crouch));   // boneless: crouched + Space
+                s.vel.y += 1.3f;
+                s.popTimer = 0.3f;
+                score(250, "BONELESS");
+            } else {
+                doOllie(in.jump ? 0.55f : s.crouch);
+            }
             s.crouch = 0;
             break;
         }
