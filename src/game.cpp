@@ -590,7 +590,10 @@ void Game::update(const Input& in, float dt) {
         }
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
         if (ground < s.pos.y - 0.3f) {
-            Vec3 n = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
+            // slope at the CURRENT position: at a convex crest the surface
+            // behind is still flat, so looking backward never engages the
+            // press-down stick and the roll-in throws you airborne
+            Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
             float t = -(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f);
             if (t < -0.12f && n.y < 0.92f && s.vel.y < 1.f) {
                 // steep continuous descent (roll-in, bank): stay pressed to the
