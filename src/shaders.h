@@ -208,6 +208,7 @@ uniform float uDistort;   // barrel distortion strength (fisheye feel)
 uniform float uVignette;
 uniform float uExposure;
 uniform float uFlash;     // bail/impact white flash
+uniform float uTime;
 out vec4 fragColor;
 void main(){
     vec2 uv = vUV*2.0-1.0;
@@ -216,7 +217,14 @@ void main(){
     uv = uv*0.5+0.5;
     vec3 col;
     if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ col = vec3(0.0); }
-    else col = texture(uScene, uv).rgb + texture(uBloom, uv).rgb*uBloomAmt;
+    else {
+        // slight chromatic aberration toward the frame edge (lens feel)
+        vec2 ca = (uv - 0.5) * (0.0012 + r2 * 0.0035);
+        col.r = texture(uScene, uv + ca).r;
+        col.g = texture(uScene, uv).g;
+        col.b = texture(uScene, uv - ca).b;
+        col += texture(uBloom, uv).rgb * uBloomAmt;
+    }
     // filmic-ish tonemap
     col = vec3(1.0) - exp(-col * uExposure);
     col = pow(col, vec3(0.85));
@@ -228,6 +236,10 @@ void main(){
     // vignette
     float vg = 1.0 - uVignette*smoothstep(0.3, 1.6, r2);
     col *= vg;
+    // subtle film grain (skate-video feel)
+    float gn = fract(sin(dot(uv * vec2(1187.3, 993.1) + mod(uTime, 100.0) * 77.7,
+                             vec2(12.9898, 78.233))) * 43758.5453);
+    col += (gn - 0.5) * 0.028;
     col += vec3(uFlash);
     fragColor = vec4(col,1.0);
 }

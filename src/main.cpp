@@ -317,6 +317,7 @@ int main(int argc, char** argv) {
         comp.setF("uVignette", 0.25f);
         comp.setF("uExposure", 1.35f);
         comp.setF("uFlash", game.flash * 0.4f);
+        comp.setF("uTime", SDL_GetTicks() * 0.001f);
         drawFSQ();
         glEnable(GL_DEPTH_TEST);
 
