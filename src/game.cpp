@@ -145,6 +145,8 @@ Mat4 Game::boardMatrix() const {
     Mat4 m = basis;
     m = Mat4::mul(m, Mat4::rotateY(s.boardSpin));
     m = Mat4::mul(m, Mat4::rotateX(s.boardRoll));
+    // wallride leans the deck hard into the wall
+    if (s.wallRide > 0.f) m = Mat4::mul(m, Mat4::rotateX(s.wallSide * 0.9f));
     // manual: pitch the deck on its axle (local Z) around the lifted end
     if (s.state == S_MANUAL)
         m = Mat4::mul(m, Mat4::rotateZ(s.manualDir * (0.30f + 0.35f * s.balance * s.manualDir)));
@@ -259,6 +261,7 @@ void Game::bail(const char* text) {
     if (s.state == S_BAIL) return;
     g_audio.fire(AudioFx::BAIL);
     s.state = S_BAIL;
+    s.wallRide = 0; s.wallN = {0, 0, 0};
     s.bailT = 0;
     s.bailText = text;
     s.flailSeed = (unsigned)(s.pos.x * 977 + s.pos.z * 131 + s.vel.x * 7) + 1;
@@ -300,6 +303,7 @@ void Game::land(bool bankLine, float steer) {
     float resid = std::abs(spinDeg - spins * 180.f);
     if (resid > 70.f && s.speed > 4.f) { bail("UNDER-ROTATED"); return; }
     s.state = S_GROUND;
+    s.wallRide = 0; s.wallN = {0, 0, 0};
     s.pos.y = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
     // landing on a downslope converts fall speed into forward speed
     {
@@ -576,9 +580,33 @@ void Game::update(const Input& in, float dt) {
         s.yaw += steer * 4.4f * dt;
         s.spinAmt += steer * 4.4f * dt;
         // move
-        Vec3 np = s.pos + s.vel * dt;
+        float preSpeed = std::hypot(s.vel.x, s.vel.z);
+        Vec3 want = s.pos + s.vel * dt;
+        Vec3 np = want;
         bool wall = world.collideWalls(np, s.vel);
+        Vec3 push = np - want;
+        if (wall && push.len2() > 1e-9f) s.wallN = push.normalized();
         s.pos = np;
+        // wallride: touching a wall mid-air with speed rides it instead of bailing
+        if (s.wallRide > 0.f) {
+            s.wallRide -= dt;
+            s.vel.y = std::max(s.vel.y, -1.5f);
+            s.vel -= s.wallN * 1.6f * dt;                 // stay pressed to the wall
+            s.lean = s.wallSide * 0.7f;
+            if (s.wallRide <= 0.f) {
+                s.vel += s.wallN * 2.4f;                  // push off
+                s.wallN = {0, 0, 0};
+                score(150, "WALLRIDE");
+            }
+        }
+        if (wall && s.wallRide <= 0.f && preSpeed > 2.5f && s.airTime < 1.6f && push.len2() > 1e-9f) {
+            s.wallRide = 0.7f;
+            Vec3 fw2(std::cos(s.yaw), 0, std::sin(s.yaw));
+            Vec3 rightW = fw2.cross({0, 1, 0});
+            s.wallSide = (-s.wallN).dot(rightW) > 0 ? 1.f : -1.f;
+            s.vel.y = std::max(s.vel.y, 1.1f);            // hop up onto the wall
+            s.trickName = "WALLRIDE"; s.trickT = 0.7f;
+        }
         // named gaps (Skate's gap list): fly through a zone once per air
         {
             static const struct { float x0, x1, z0, z1, y0; const char* name; int pts; } GAPS[] = {
@@ -599,7 +627,7 @@ void Game::update(const Input& in, float dt) {
             }
         }
         // rising past a lip: walls only push, so vert airs clear the coping
-        if (wall && s.vel.y <= 0.5f) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
+        if (wall && s.vel.y <= 0.5f && s.wallRide <= 0.f) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.25f);
         if (s.vel.y <= 0) {
             // try grind first when crossing an edge lip — but only after a real

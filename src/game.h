@@ -92,6 +92,9 @@ struct Skater {
     int lastRun = 0;          // most recent finished run's points
     int meatPts = 0;          // Hall of Meat running total
     int meatGain = 0;         // points earned by the last bail
+    float wallRide = 0;       // >0 while riding a wall (timed)
+    Vec3 wallN{0, 0, 0};      // horizontal wall normal (push direction)
+    float wallSide = 1;       // roll direction into the wall
     float trickT = 0;
     bool pendingLand = false;
     float speed = 0;
