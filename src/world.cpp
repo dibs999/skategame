@@ -613,6 +613,19 @@ void World::build(const TexSet& tex) {
         bw.box({-73.4f, 0.5f, 8}, {0.4f, 0.5f, 56});
         cx.add(bw, {tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f});
     }
+    // traffic cones: bright orange color pops scattered as skate obstacles
+    {
+        auto& cn = cx.mb();
+        cn.setColor({1, 1, 1});
+        auto cone = [&](float x, float z) {
+            cn.box({x, 0.02f, z}, {0.14f, 0.02f, 0.14f});                    // base
+            cn.cylinder({x, 0.03f, z}, {x, 0.30f, z}, 0.10f, 8);            // body lower
+            cn.cylinder({x, 0.10f, z}, {x, 0.34f, z}, 0.055f, 8);           // taper
+        };
+        cone(-8, -2); cone(-4.5f, 3); cone(2, -6); cone(9, 8);
+        cone(20, -3); cone(-18, -7); cone(33, 6); cone(-30, 14);
+        cx.add(cn, {0, 1.f, {0.95f, 0.35f, 0.08f}, 0.25f, 30.f, 1.f, 0.f, 0.f});
+    }
     // graffiti decals: spray-painted tags layered on the big flat concrete/
     // wood walls — the Port Carverton vibe lives on these
     {
