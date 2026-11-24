@@ -220,6 +220,11 @@ void main(){
     // filmic-ish tonemap
     col = vec3(1.0) - exp(-col * uExposure);
     col = pow(col, vec3(0.85));
+    // skate-video grade: contrast curve, saturation, slight warmth
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, 1.18);
+    col = mix(col, col * col * (3.0 - 2.0 * col), 0.35);
+    col *= vec3(1.02, 1.0, 0.97);
     // vignette
     float vg = 1.0 - uVignette*smoothstep(0.3, 1.6, r2);
     col *= vg;
@@ -269,28 +274,5 @@ void main(){
     if(r2 > 1.0) discard;
     float a = (1.0-r2) * vColor.a;
     fragColor = vec4(vColor.rgb, a);
-}
-)";
-
-// Unlit textured quad (session marker flag etc.)
-static const char* UNLIT_FS = R"(
-#version 330 core
-in vec3 vWorld;
-in vec3 vNormal;
-in vec2 vUV;
-in vec4 vColor;
-in vec4 vShadow;
-uniform sampler2D uTex;
-uniform vec3 uCamPos;
-uniform vec3 uFogColor;
-uniform float uFogDensity;
-uniform float uUseTex;
-out vec4 fragColor;
-void main(){
-    vec3 col = vColor.rgb;
-    if(uUseTex > 0.5) col *= texture(uTex, vUV).rgb;
-    float dist = length(uCamPos - vWorld);
-    float fog = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist);
-    fragColor = vec4(mix(col,uFogColor,fog), vColor.a);
 }
 )";

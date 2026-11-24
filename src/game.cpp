@@ -1,5 +1,6 @@
 // Skater physics, tricks, grinds, bail, scoring, and the articulated model.
 #include "game.h"
+#include "audio.h"
 #include "geom.h"
 #include <cmath>
 #include <algorithm>
@@ -97,6 +98,11 @@ void Game::init(const TexSet& t) {
         mFlag = f.build();
     }
     s.pos = {-10, 0, 4}; s.yaw = -0.4f;
+    // dev/screenshot override: SKATE_SPAWN="x,z,yaw[,y]" places the skater
+    if (const char* sp = getenv("SKATE_SPAWN")) {
+        int n = sscanf(sp, "%f,%f,%f,%f", &s.pos.x, &s.pos.z, &s.yaw, &s.pos.y);
+        if (n < 4) s.pos.y = world.supportHeight(s.pos.x, s.pos.z, 1e9f) + 0.05f; // on top of whatever is there
+    }
     s.state = S_GROUND;
 }
 
@@ -150,6 +156,7 @@ void Game::score(int pts, const char* name) {
 }
 
 void Game::doOllie(float power) {
+    g_audio.fire(AudioFx::POP);
     s.vel.y = 2.6f + power * 3.6f;
     s.state = S_AIR;
     s.airTime = 0;
@@ -230,6 +237,7 @@ void Game::endGrind(bool popOut) {
 
 void Game::bail(const char* text) {
     if (s.state == S_BAIL) return;
+    g_audio.fire(AudioFx::BAIL);
     s.state = S_BAIL;
     s.bailT = 0;
     s.bailText = text;
@@ -255,10 +263,22 @@ void Game::land() {
     if (impact > 17.f) { bail("SLAMMED HARD"); return; }
     s.state = S_GROUND;
     s.pos.y = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+    // landing on a downslope converts fall speed into forward speed
+    {
+        Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        Vec3 dh(n.x, 0, n.z);
+        float sl = dh.len();
+        Vec3 fwd(std::cos(s.yaw), 0, std::sin(s.yaw));
+        if (sl > 0.15f && (fwd.x * n.x + fwd.z * n.z) / sl > 0.3f) {
+            float tot = s.vel.len();
+            float sp = std::max(std::hypot(s.vel.x, s.vel.z), tot * 0.8f);
+            s.vel.x = fwd.x * sp; s.vel.z = fwd.z * sp;
+        }
+    }
     s.vel.y = 0;
     s.flip = F_NONE; s.grab = G_NONE;
-    if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); }
-    else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); }
+    if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); g_audio.fire(AudioFx::LANDHARD); }
+    else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); g_audio.fire(AudioFx::LAND); }
     if (s.airTime > 0.5f && s.trickName.empty()) score(50, "OLLIE");
     // bank the line
     if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
@@ -282,11 +302,21 @@ void Game::teleportMarker() {
 
 void Game::update(const Input& in, float dt) {
     Skater& s = this->s;
+    if (getenv("SKATE_DEBUGPOS")) {           // dev aid: dump state ~2x/sec
+        static int dbg = 0;
+        if (++dbg % 30 == 0)
+            fprintf(stderr, "POS %.1f %.1f %.1f st%d spd %.1f yaw %.2f sup %.2f\n",
+                    s.pos.x, s.pos.y, s.pos.z, (int)s.state, s.speed, s.yaw,
+                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y));
+    }
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
 
     s.speed = std::hypot(s.vel.x, s.vel.z);
     s.wheelSpin += s.speed * dt / 0.027f;
+    g_audio.roll = s.state == S_GROUND ? std::min(s.speed / 16.f, 0.7f) : 0.f;
+    g_audio.wind = clampf((s.speed - 8.f) / 30.f, 0.f, 0.5f);
+    g_audio.grind = s.state == S_GRIND ? 0.5f : 0.f;
     s.pushAnim = std::max(0.f, s.pushAnim - dt);
     s.trickT = std::max(0.f, s.trickT - dt);
     if (s.trickT <= 0) s.trickName.clear();
@@ -335,12 +365,33 @@ void Game::update(const Input& in, float dt) {
         s.vel.y = 0;
         // move
         Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
+        Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
         bool wall = world.collideWalls(np, s.vel);
         s.pos.x = np.x; s.pos.z = np.z;
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        // on a steep transition (slope > ~45 deg) a wall means a lip: launch
+        // up it instead of slamming into whatever sits behind the coping
+        if (wall && slope > 1.0f) {
+            float keep = std::min(1.f / std::sqrt(1 + slope * slope) + 0.3f, 1.f);
+            s.vel.y = std::min(s.speed * slope, 10.f);
+            s.vel.x *= keep; s.vel.z *= keep;
+            s.state = S_AIR;
+            s.airTime = 0; s.fallStart = s.pos.y;
+            s.trickWindow = 0.25f;
+            s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+            s.grab = G_NONE;
+            break;
+        }
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
         if (ground < s.pos.y - 0.3f) {
-            // rolled off an edge
+            // rolled off an edge — keep the slope's vertical velocity component
+            // (launch off kicker lips / air out of quarter pipes)
+            Vec3 n = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
+            float t = -(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f);
+            float keep = std::min(1.f / std::sqrt(1 + t * t) + 0.3f, 1.f);
+            s.vel.y = clampf(s.speed * t, -10.f, 10.f);
+            s.vel.x *= keep; s.vel.z *= keep;
             s.state = S_AIR;
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
@@ -390,13 +441,20 @@ void Game::update(const Input& in, float dt) {
         Vec3 np = s.pos + s.vel * dt;
         bool wall = world.collideWalls(np, s.vel);
         s.pos = np;
-        if (wall) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
+        // rising past a lip: walls only push, so vert airs clear the coping
+        if (wall && s.vel.y <= 0.5f) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.25f);
         if (s.vel.y <= 0) {
-            // try grind first when crossing an edge lip
-            if (world.findGrindEdge(s.pos) >= 0 && s.pos.y < ground + 0.45f + 0.35f) {
-                tryGrind();
-                break;
+            // try grind first when crossing an edge lip — but only after a real
+            // pop, a long fall, or when actually traveling along the edge, so a
+            // plain roll-off/drop-in doesn't lock onto coping
+            int ge = world.findGrindEdge(s.pos);
+            if (ge >= 0 && s.pos.y < ground + 0.45f + 0.35f) {
+                auto& e = world.edges[ge];
+                Vec3 d = (e.b - e.a).normalized();
+                bool locked = s.popTimer > 0 || s.airTime > 0.4f ||
+                              std::abs(s.vel.x * d.x + s.vel.z * d.z) > 1.0f;
+                if (locked) { tryGrind(); break; }
             }
             if (s.pos.y <= ground + 0.02f) land();
         }
@@ -497,7 +555,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     bool bail_ = (s.state == S_BAIL);
     float tuck = air ? clampf(s.airTime * 3.f, 0, 1) * 0.55f : 0;
     if (s.flip != F_NONE) tuck = 0.7f;
-    float hipH = (0.95f - cr * 0.32f) + (air ? 0.15f : 0.f);
+    float hipH = (0.95f - cr * 0.32f) + (air ? 0.15f : 0.f) - tuck * 0.10f;
     Vec3 hipPos = s.pos + Vec3(0, bail_ ? 0.35f : hipH, 0);
     if (bail_) {
         // ragdoll-ish tumble: body pitched over, flailing
