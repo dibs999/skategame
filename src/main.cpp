@@ -91,13 +91,14 @@ int main(int argc, char** argv) {
     SpriteBatch sb; sb.init();
     HUD hud;
 
+    bool dusk = false;                                    // N toggles golden hour
     Vec3 sunDir = Vec3(0.55f, 0.62f, 0.35f).normalized(); // direction TO the sun
     Vec3 camPos = game.s.pos + Vec3(-3, 1, 0);
     Vec3 camTarget = game.s.pos;
     float camRoll = 0;
 
     Input in;
-    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevSpot[5] = {};
+    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevDusk = false, prevSpot[5] = {};
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
     double perfFreq = (double)SDL_GetPerformanceFrequency();
@@ -142,6 +143,8 @@ int main(int argc, char** argv) {
         in.goMarker = k[SDL_SCANCODE_T] && !prevGo;
         in.runToggle = k[SDL_SCANCODE_O] && !prevRun;
         prevRun = k[SDL_SCANCODE_O];
+        if (k[SDL_SCANCODE_N] && !prevDusk) { dusk = !dusk; sunDir = Vec3(dusk ? 0.9f : 0.55f, dusk ? 0.20f : 0.62f, dusk ? 0.28f : 0.35f).normalized(); }
+        prevDusk = k[SDL_SCANCODE_N];
         in.spot = -1;
         for (int i = 0; i < 5; i++)
             if (k[SDL_SCANCODE_1 + i] && !prevSpot[i]) in.spot = i;
@@ -245,12 +248,12 @@ int main(int argc, char** argv) {
         // lit scene
         lit.use();
         lit.setVec3("uSunDir", sunDir);
-        lit.setVec3("uSunColor", {1.55f, 1.42f, 1.15f});
+        lit.setVec3("uSunColor", dusk ? Vec3(1.8f, 0.95f, 0.5f) : Vec3(1.55f, 1.42f, 1.15f));
         lit.setVec3("uCamPos", camFinal);
-        lit.setVec3("uAmbientTop", {0.26f, 0.33f, 0.45f});
-        lit.setVec3("uAmbientBottom", {0.20f, 0.18f, 0.16f});
-        lit.setVec3("uFogColor", {0.72f, 0.80f, 0.90f});
-        lit.setF("uFogDensity", 0.0045f);
+        lit.setVec3("uAmbientTop", dusk ? Vec3(0.16f, 0.15f, 0.30f) : Vec3(0.26f, 0.33f, 0.45f));
+        lit.setVec3("uAmbientBottom", dusk ? Vec3(0.15f, 0.11f, 0.10f) : Vec3(0.20f, 0.18f, 0.16f));
+        lit.setVec3("uFogColor", dusk ? Vec3(0.82f, 0.52f, 0.38f) : Vec3(0.72f, 0.80f, 0.90f));
+        lit.setF("uFogDensity", dusk ? 0.006f : 0.0045f);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, shadowFbo.tex);
         lit.setI("uShadowMap", 1);
@@ -323,7 +326,7 @@ int main(int argc, char** argv) {
         comp.setF("uBloomAmt", 0.55f);
         comp.setF("uDistort", 0.030f + game.s.speed * 0.0025f); // fisheye feel, more at speed
         comp.setF("uVignette", 0.25f);
-        comp.setF("uExposure", 1.35f);
+        comp.setF("uExposure", dusk ? 1.18f : 1.35f);
         comp.setF("uFlash", game.flash * 0.4f);
         comp.setF("uTime", SDL_GetTicks() * 0.001f);
         drawFSQ();
