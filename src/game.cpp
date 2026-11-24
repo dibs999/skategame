@@ -1,8 +1,11 @@
 // Skater physics, tricks, grinds, bail, scoring, and the articulated model.
 #include "game.h"
+#include "audio.h"
 #include "geom.h"
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 
 static const float GRAV = 12.5f;
 static const float PUSH_ACCEL = 4.2f, PUSH_CAP = 9.0f;
@@ -66,12 +69,20 @@ static Mat4 capsuleXform(const Vec3& a, const Vec3& b, float r) {
     return Mat4::mul(basis, Mat4::scale({r * 2.f, len * 0.55f, r * 2.f}));
 }
 
+static const char* bestPath() {
+    static char path[512];
+    if (!path[0]) { const char* h = getenv("HOME"); snprintf(path, sizeof path, "%s/.portcarverton_best", h ? h : "."); }
+    return path;
+}
+static void saveBest(int v) { FILE* f = fopen(bestPath(), "w"); if (f) { fprintf(f, "%d", v); fclose(f); } }
+
 void Game::init(const TexSet& t) {
     tex = t;
+    if (FILE* f = fopen(bestPath(), "r")) { if (fscanf(f, "%d", &s.bestScore) != 1) s.bestScore = 0; fclose(f); }
     world.build(t);
     // skater/board meshes
-    { MeshBuilder m; m.setColor({1,1,1}); m.capsule({0,-0.5f,0},{0,0.5f,0},0.5f,10); mCapsule = m.build(); }
-    { MeshBuilder m; m.setColor({1,1,1}); m.sphere({0,0,0},1.f,12,8); mSphere = m.build(); }
+    { MeshBuilder m; m.setColor({1,1,1}); m.capsule({0,-0.5f,0},{0,0.5f,0},0.5f,20); mCapsule = m.build(); }
+    { MeshBuilder m; m.setColor({1,1,1}); m.sphere({0,0,0},1.f,22,16); mSphere = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.box({0,0,0},{0.5f,0.5f,0.5f}); mBox = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.deck(0.82f, 0.215f, 0.02f, 0.035f); mDeck = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.deck(0.82f, 0.205f, 0.006f, 0.037f); mDeckTop = m.build(); }
@@ -97,6 +108,11 @@ void Game::init(const TexSet& t) {
         mFlag = f.build();
     }
     s.pos = {-10, 0, 4}; s.yaw = -0.4f;
+    // dev/screenshot override: SKATE_SPAWN="x,z,yaw[,y]" places the skater
+    if (const char* sp = getenv("SKATE_SPAWN")) {
+        int n = sscanf(sp, "%f,%f,%f,%f", &s.pos.x, &s.pos.z, &s.yaw, &s.pos.y);
+        if (n < 4) s.pos.y = world.supportHeight(s.pos.x, s.pos.z, 1e9f) + 0.05f; // on top of whatever is there
+    }
     s.state = S_GROUND;
 }
 
@@ -105,13 +121,12 @@ Mat4 Game::boardMatrix() const {
     if (s.state == S_BAIL) {
         Vec3 p = s.looseBoard.pos;
         Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
-        Vec3 r = f.cross({0,1,0});
-        Mat4 basis = Mat4::fromBasis(-r, {0,1,0}, f, p);
+        Mat4 basis = Mat4::fromBasis(f, {0,1,0}, f.cross({0,1,0}), p);
         return Mat4::mul(basis, Mat4::rotateAxis({0,0,1}, s.looseBoard.spin));
     }
     Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
     Vec3 n{0, 1, 0};
-    if (s.state == S_GROUND) n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+    if (s.state == S_GROUND || s.state == S_MANUAL) n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
     if (s.state == S_GRIND && s.grindEdge >= 0 && !s.grindBoardslide) {
         // pitch board to the edge slope for 50-50
         auto& e = world.edges[s.grindEdge];
@@ -121,8 +136,11 @@ Mat4 Game::boardMatrix() const {
         Vec3 rightG = d.cross(upG).normalized();
         Vec3 up2 = rightG.cross(d);
         float boardY = s.pos.y + 0.075f;
-        Mat4 basis = Mat4::fromBasis(rightG, up2, d, {s.pos.x, boardY, s.pos.z});
+        Mat4 basis = Mat4::fromBasis(d, up2, d.cross(up2), {s.pos.x, boardY, s.pos.z});
         Mat4 m = basis;
+        // smith/crooked ride one truck: deck tips onto the rail
+        if (s.grindType == 2) m = Mat4::mul(m, Mat4::rotateZ(-0.28f));
+        if (s.grindType == 3) m = Mat4::mul(m, Mat4::rotateZ(0.30f));
         m = Mat4::mul(m, Mat4::rotateY(s.boardSpin));
         m = Mat4::mul(m, Mat4::rotateX(s.boardRoll));
         return m;
@@ -131,32 +149,46 @@ Mat4 Game::boardMatrix() const {
     Vec3 right = fwd.cross(n).normalized();
     Vec3 up = right.cross(fwd);
     float boardY = s.pos.y + 0.075f; // wheels+trucks+deck height above surface
-    Mat4 basis = Mat4::fromBasis(right, up, fwd, {s.pos.x, boardY, s.pos.z});
+    // deck length runs along local X -> nose points along fwd
+    Mat4 basis = Mat4::fromBasis(fwd, up, fwd.cross(up), {s.pos.x, boardY, s.pos.z});
     // flip anims in board space
     Mat4 m = basis;
     m = Mat4::mul(m, Mat4::rotateY(s.boardSpin));
     m = Mat4::mul(m, Mat4::rotateX(s.boardRoll));
-    // pop tilt
-    if (s.popTimer > 0) m = Mat4::mul(m, Mat4::rotateZ(0)); // reserved
+    // wallride leans the deck hard into the wall
+    if (s.wallRide > 0.f) m = Mat4::mul(m, Mat4::rotateX(s.wallSide * 0.9f));
+    // manual: pitch the deck on its axle (local Z) around the lifted end
+    if (s.state == S_MANUAL)
+        m = Mat4::mul(m, Mat4::rotateZ(s.manualDir * (0.30f + 0.35f * s.balance * s.manualDir)));
     return m;
 }
 
 void Game::score(int pts, const char* name) {
+    g_audio.fire(AudioFx::DING);
     s.lineScore += pts * s.mult;
     s.mult = std::min(s.mult + 1, 9);
     s.comboT = 3.0f;
     s.trickName = name;
     s.trickT = 2.2f;
+    int tot = s.totalScore + s.lineScore;
+    if (tot > s.bestScore) { s.bestScore = tot; saveBest(tot); }
+    // chain the name into the running line readout, keeping the last 4 entries
+    if (!s.lineTricks.empty()) s.lineTricks += " + ";
+    s.lineTricks += name;
+    int seps = 0;
+    for (char c : s.lineTricks) if (c == '+') seps++;
+    if (seps >= 4) s.lineTricks = s.lineTricks.substr(s.lineTricks.find(" + ") + 3);
 }
 
 void Game::doOllie(float power) {
+    g_audio.fire(AudioFx::POP);
     s.vel.y = 2.6f + power * 3.6f;
     s.state = S_AIR;
     s.airTime = 0;
     s.trickWindow = 0.45f;
     s.fallStart = s.pos.y;
     s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-    s.grab = G_NONE;
+    s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
     s.popTimer = 0.18f;
     fx.dust(s.pos, 4, 0.5f);
 }
@@ -171,16 +203,21 @@ void Game::startFlip(Flip f) {
     case F_HEEL: n = "HEELFLIP"; break;
     case F_SHOVE: n = "POP SHOVE-IT"; break;
     case F_TREFLIP: n = "360 FLIP"; break;
+    case F_VARIALKICK: n = "VARIAL KICKFLIP"; break;
+    case F_HARD: n = "HARDFLIP"; break;
+    case F_VARIALHEEL: n = "VARIAL HEELFLIP"; break;
+    case F_INWARD: n = "INWARD HEELFLIP"; break;
+    case F_IMPOSSIBLE: n = "IMPOSSIBLE"; break;
+    case F_BIGSPIN: n = "360 SHOVE-IT"; break;
     default: break;
     }
-    int pts = f == F_TREFLIP ? 500 : (f == F_SHOVE ? 250 : 300);
-    s.lineScore += pts * s.mult;
-    s.mult = std::min(s.mult + 1, 9);
-    s.comboT = 3.0f;
-    s.trickName = n; s.trickT = 2.2f;
+    int pts = f == F_TREFLIP ? 500 : (f == F_SHOVE ? 250 : (f > F_TREFLIP ? 420 : 300));
+    score(pts, n);
 }
 
-void Game::tryGrind() {
+static const char* GRIND_NAMES[] = {"50-50", "BOARDSLIDE", "SMITH GRIND", "CROOKED", "LIPSLIDE"};
+
+void Game::tryGrind(float steer) {
     int e = world.findGrindEdge(s.pos);
     if (e < 0) return;
     auto& g = world.edges[e];
@@ -189,6 +226,10 @@ void Game::tryGrind() {
     Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
     float align = std::abs(f.dot(dir));
     s.grindBoardslide = align < 0.55f;
+    // steer input at lock-on picks the grind: angled onto the rail = crooked,
+    // back truck only = smith, board popped over = lipslide
+    if (s.grindBoardslide) s.grindType = steer > 0.3f ? 4 : 1;
+    else                   s.grindType = steer > 0.3f ? 2 : (steer < -0.3f ? 3 : 0);
     s.grindEdge = e;
     s.state = S_GRIND;
     s.balance = 0;
@@ -201,15 +242,16 @@ void Game::tryGrind() {
     Vec3 c = g.a + ab * t;
     s.pos = {c.x, c.y + 0.02f, c.z};
     s.vel = dirV * std::max(s.vel.len() * 0.9f, 2.f);
-    s.trickName = s.grindBoardslide ? "BOARDSLIDE" : "50-50";
+    s.trickName = GRIND_NAMES[s.grindType];
     s.trickT = 2.2f;
     fx.sparks(s.pos, dir * -1.f, 6);
     shake = std::max(shake, 0.25f);
 }
 
 void Game::endGrind(bool popOut) {
-    int pts = 100 + (int)(s.grindDist * 45.f);
-    score(pts, s.grindBoardslide ? "BOARDSLIDE" : "50-50");
+    int base = s.grindType == 4 ? 150 : (s.grindType >= 2 ? 140 : (s.grindType == 1 ? 120 : 100));
+    int pts = base + (int)(s.grindDist * 45.f);
+    score(pts, GRIND_NAMES[s.grindType]);
     s.grindEdge = -1;
     if (popOut) {
         s.vel.y = 3.6f;
@@ -218,34 +260,51 @@ void Game::endGrind(bool popOut) {
         s.trickWindow = 0.35f;
         s.fallStart = s.pos.y;
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-        s.grab = G_NONE;
+        s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
     } else {
+        s.grindLockout = 0.5f;
         s.state = S_AIR;
         s.airTime = 0.15f;
         s.trickWindow = 0.3f;
         s.fallStart = s.pos.y;
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+        s.spinAmt = 0; s.gapMask = 0;
     }
 }
 
 void Game::bail(const char* text) {
     if (s.state == S_BAIL) return;
+    g_audio.fire(AudioFx::BAIL);
     s.state = S_BAIL;
+    s.wallRide = 0; s.wallN = {0, 0, 0};
     s.bailT = 0;
     s.bailText = text;
     s.flailSeed = (unsigned)(s.pos.x * 977 + s.pos.z * 131 + s.vel.x * 7) + 1;
     s.looseBoard.pos = s.pos + Vec3(0, 0.12f, 0);
     s.looseBoard.vel = s.vel * 0.7f + Vec3(randf(s.flailSeed) * 2 - 1, 2.5f, randf(s.flailSeed) * 2 - 1);
     s.looseBoard.spin = 0;
-    s.lineScore = 0;
+    s.lineScore = 0; s.lineTricks.clear();
     s.mult = 1;
     s.grindEdge = -1;
+    // Hall of Meat: harder, faster, higher slams are worth more
+    s.meatGain = (int)(40 + s.speed * 9 + std::max(0.f, s.fallStart - s.pos.y) * 14 +
+                       std::abs(s.vel.y) * 5);
+    s.meatPts += s.meatGain;
     shake = std::max(shake, 0.8f);
     flash = 0.5f;
     fx.dust(s.pos, 14, 2.5f, s.vel * 0.3f);
 }
 
-void Game::land() {
+void Game::endManual() {
+    s.state = S_GROUND;
+    s.manualDir = 0;
+    s.balance = 0;
+    fx.dust(s.pos, 3, 0.5f);
+    // exiting the manual is the landing — bank the line
+    if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); }
+}
+
+void Game::land(bool bankLine, float steer) {
     float impact = -s.vel.y;
     bool bad = (s.flip != F_NONE && s.flipPhase < 0.8f);
     bool upsideDown = std::fmod(std::abs(s.boardRoll), 6.28f) > 2.2f &&
@@ -253,15 +312,46 @@ void Game::land() {
     if (bad) { bail("UNDER-ROTATED"); return; }
     if (upsideDown) { bail("LANDED PRIMO"); return; }
     if (impact > 17.f) { bail("SLAMMED HARD"); return; }
+    // air spins: nearest 180 counts; badly off-axis landings clip
+    float spinDeg = s.spinAmt * 57.2958f;
+    int spins = (int)std::lround(spinDeg / 180.f);
+    float resid = std::abs(spinDeg - spins * 180.f);
+    if (resid > 70.f && s.speed > 4.f) { bail("UNDER-ROTATED"); return; }
     s.state = S_GROUND;
+    s.wallRide = 0; s.wallN = {0, 0, 0};
     s.pos.y = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+    // landing on a downslope converts fall speed into forward speed
+    {
+        Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        Vec3 dh(n.x, 0, n.z);
+        float sl = dh.len();
+        Vec3 fwd(std::cos(s.yaw), 0, std::sin(s.yaw));
+        if (sl > 0.15f && (fwd.x * n.x + fwd.z * n.z) / sl > 0.3f) {
+            float tot = s.vel.len();
+            float sp = std::max(std::hypot(s.vel.x, s.vel.z), tot * 0.8f);
+            s.vel.x = fwd.x * sp; s.vel.z = fwd.z * sp;
+        }
+    }
     s.vel.y = 0;
     s.flip = F_NONE; s.grab = G_NONE;
-    if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); }
-    else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); }
+    if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); g_audio.fire(AudioFx::LANDHARD); }
+    else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); g_audio.fire(AudioFx::LAND); }
+    if (std::abs(spins) >= 1) {
+        char buf[80];
+        std::snprintf(buf, sizeof buf, "%s%s %d",
+                      s.trickName.empty() ? "" : (s.trickName + " ").c_str(),
+                      spins > 0 ? "FS" : "BS", std::abs(spins) * 180);
+        score(120 * std::abs(spins), buf);
+    }
     if (s.airTime > 0.5f && s.trickName.empty()) score(50, "OLLIE");
+    // holding steer through landing = revert pivot, keeps the line alive
+    if (steer != 0.f && s.speed > 1.f) {
+        s.revertDir = steer > 0.f ? 1 : -1;
+        s.revertT = 0.68f;
+        bankLine = false;
+    }
     // bank the line
-    if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
+    if (bankLine && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); }
 }
 
 void Game::setMarkerHere() {
@@ -276,22 +366,79 @@ void Game::teleportMarker() {
     s.yaw = markerYaw;
     s.vel = {0, 0, 0};
     s.state = S_GROUND;
-    s.lineScore = 0; s.mult = 1;
+    s.lineScore = 0; s.mult = 1; s.lineTricks.clear();
+    flash = 0.25f;
+}
+
+void Game::teleportSpot(int i) {
+    static const struct { float x, z, yaw; const char* name; } SPOTS[] = {
+        {-10.f,    4.f, -0.4f,   "PLAZA"},
+        {-34.f,  -37.f,  1.5708f, "THE BOWL"},
+        { 53.f,   40.f,  0.f,     "MEGA RAMP"},
+        { 40.5f, -34.f,  0.f,     "MINI RAMP"},
+        { 20.f,   -9.f,  1.5708f, "STAIR SET"},
+    };
+    if (i < 0 || i >= 5) return;
+    auto& sp = SPOTS[i];
+    s.pos = {sp.x, 0, sp.z};
+    s.pos.y = world.supportHeight(sp.x, sp.z, 1e9f) + 0.05f;
+    s.yaw = sp.yaw;
+    s.vel = {0, 0, 0};
+    s.state = S_GROUND;
+    s.lineScore = 0; s.mult = 1; s.lineTricks.clear();
+    s.trickName = std::string("SPOT: ") + sp.name;
+    s.trickT = 1.6f;
     flash = 0.25f;
 }
 
 void Game::update(const Input& in, float dt) {
     Skater& s = this->s;
+    if (getenv("SKATE_DEBUGPOS")) {           // dev aid: dump state ~2x/sec
+        static int dbg = 0;
+        if (++dbg % 30 == 0)
+            fprintf(stderr, "POS %.1f %.1f %.1f st%d spd %.1f yaw %.2f sup %.2f fps %.0f\n",
+                    s.pos.x, s.pos.y, s.pos.z, (int)s.state, s.speed, s.yaw,
+                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y), 1.f / dt);
+    }
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
+    if (in.spot >= 0) teleportSpot(in.spot);
+    if (in.resetScore) {
+        s.totalScore = 0; s.lineScore = 0; s.mult = 1; s.meatPts = 0;
+        s.lineTricks.clear(); s.runTimer = -1.f;
+        s.trickName = "SCORE RESET"; s.trickT = 1.4f;
+    }
+    // fell out of the world: back to marker or spawn
+    if (!std::isfinite(s.pos.y) || s.pos.y < -8.f) {
+        if (hasMarker) teleportMarker();
+        else { s.pos = {-10, 0, 4}; s.yaw = -0.4f; s.vel = {0, 0, 0}; s.state = S_GROUND; }
+        s.lineScore = 0; s.mult = 1; s.lineTricks.clear();
+    }
 
     s.speed = std::hypot(s.vel.x, s.vel.z);
     s.wheelSpin += s.speed * dt / 0.027f;
+    g_audio.roll = (s.state == S_GROUND || s.state == S_MANUAL) ? std::min(s.speed / 16.f, 0.7f) : 0.f;
+    g_audio.wind = clampf((s.speed - 8.f) / 30.f, 0.f, 0.5f);
+    g_audio.grind = s.state == S_GRIND ? 0.5f : 0.f;
     s.pushAnim = std::max(0.f, s.pushAnim - dt);
     s.trickT = std::max(0.f, s.trickT - dt);
+    if (in.runToggle) {
+        s.runTimer = 120.f;
+        s.runBase = s.totalScore + s.lineScore;
+        s.trickName = "SCORE ATTACK"; s.trickT = 2.0f;
+    }
+    if (s.runTimer > 0.f) {
+        s.runTimer -= dt;
+        if (s.runTimer <= 0.f) {
+            s.lastRun = s.totalScore + s.lineScore - s.runBase;
+            s.trickName = "TIME!"; s.trickT = 4.f;
+        }
+    }
     if (s.trickT <= 0) s.trickName.clear();
+    now += dt;
     s.popTimer = std::max(0.f, s.popTimer - dt);
-    if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0 && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; } }
+    s.grindLockout = std::max(0.f, s.grindLockout - dt);
+    if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0 && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); } }
     shake = dampf(shake, 0, 6, dt);
     flash = dampf(flash, 0, 7, dt);
     s.crouchVis = dampf(s.crouchVis, s.crouch, 12, dt);
@@ -306,17 +453,58 @@ void Game::update(const Input& in, float dt) {
         static float prevCrouchKey = 0;
         bool released = prevCrouchKey > 0.5f && !in.crouch;
         prevCrouchKey = in.crouch ? 1 : 0;
-        if ((released && s.crouch > 0.15f) || in.jump) {
-            doOllie(in.jump ? 0.55f : s.crouch);
+        Vec3 nrm = world.supportNormal(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        bool onTransition = nrm.y < 0.82f;
+        if ((released && s.crouch > 0.15f && !onTransition) || in.jump) {
+            if (in.jump && s.crouch > 0.35f) {
+                doOllie(std::min(1.f, s.crouch));   // boneless: crouched + Space
+                s.vel.y += 1.3f;
+                s.popTimer = 0.3f;
+                score(250, "BONELESS");
+            } else {
+                doOllie(in.jump ? 0.55f : s.crouch);
+            }
             s.crouch = 0;
             break;
         }
+        // revert pivot: quick 180 on the wheels after landing with steer held
+        if (s.revertT > 0.f) {
+            s.yaw += s.revertDir * 4.6f * dt;   // ~180 over the window
+            s.revertT -= dt;
+            if (s.revertT <= 0.f) { s.revertDir = 0; score(40, "REVERT"); }
+        }
+        // manual entry while rolling
+        if ((in.manual || in.noseManual) && s.speed > 1.f) {
+            s.manualDir = in.noseManual ? -1 : 1;
+            s.state = S_MANUAL;
+            s.balance = 0;
+            s.trickName = s.manualDir > 0 ? "MANUAL" : "NOSE MANUAL";
+            s.trickT = 1.2f;
+            break;
+        }
+        // carving: heading turns, velocity follows the deck (rides fakie after
+        // a landed 180 until you carve back around). Braking into a hard carve
+        // breaks traction: a powerslide — board swings out, speed bleeds fast.
+        bool sliding = in.brake && std::abs(steer) > 0.5f && s.speed > 3.f;
+        // tic-tac: near-standstill carving pivots on the back truck instead
+        float yawRate = steer * (1.6f + s.speed * 0.12f) * (sliding ? 1.9f : 1.f);
+        if (s.speed < 1.2f) yawRate = steer * 3.2f;
+        s.yaw += yawRate * dt;
+        bool fakie = false;
+        if (s.speed > 0.4f) {
+            float vh = std::atan2(s.vel.z, s.vel.x);
+            float dv = std::remainder(s.yaw - vh, 6.2832f);
+            fakie = std::abs(dv) > 1.5708f;
+            if (!fakie) {
+                float follow = sliding ? 1.1f : 3.5f;
+                float a = vh + clampf(dv, -follow * dt, follow * dt);
+                s.vel.x = std::cos(a) * s.speed;
+                s.vel.z = std::sin(a) * s.speed;
+            }
+        }
         // pushing
         if (in.push && s.pushAnim <= 0 && s.speed < PUSH_CAP) s.pushAnim = 0.75f;
-        if (s.pushAnim > 0) s.vel += f * (PUSH_ACCEL * dt);
-        // carving
-        float yawRate = steer * (1.6f + s.speed * 0.12f);
-        s.yaw += yawRate * dt;
+        if (s.pushAnim > 0) s.vel += f * (PUSH_ACCEL * dt * (fakie ? -1.f : 1.f));
         s.lean = dampf(s.lean, steer * 0.5f, 8, dt);
         float scrub = std::abs(yawRate) * 0.05f;
         // friction + slope
@@ -324,8 +512,19 @@ void Game::update(const Input& in, float dt) {
         Vec3 g(0, -GRAV, 0);
         Vec3 a = g - n * g.dot(n);           // gravity along surface
         s.vel += a * dt;
+        // pumping: holding crouch while climbing a transition adds speed
+        if (s.crouch > 0.5f && s.speed > 0.5f) {
+            float up = -(f.x * n.x + f.z * n.z) / std::max(n.y, 0.3f);
+            if (up > 0.05f) s.vel += f * std::min(up, 1.5f) * 1.6f * dt;
+        }
         float fr = 0.4f + scrub;
         if (in.brake) fr += 3.0f;
+        if (sliding) {
+            fr += 1.4f;
+            if (randf(s.flailSeed) < 0.6f) fx.dust(s.pos - f * 0.35f, 2, 0.7f);
+            s.trickName = "POWERSLIDE"; s.trickT = 0.4f;
+            s.lineScore += (int)(45 * dt * s.mult);
+        }
         s.vel.x -= s.vel.x * fr * dt;
         s.vel.z -= s.vel.z * fr * dt;
         if (s.speed > PUSH_CAP * 1.02f && s.pushAnim > 0) {
@@ -335,17 +534,38 @@ void Game::update(const Input& in, float dt) {
         s.vel.y = 0;
         // move
         Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
+        Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
         bool wall = world.collideWalls(np, s.vel);
         s.pos.x = np.x; s.pos.z = np.z;
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
-        if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
-        if (ground < s.pos.y - 0.3f) {
-            // rolled off an edge
+        // on a steep transition (slope > ~45 deg) a wall means a lip: launch
+        // up it instead of slamming into whatever sits behind the coping
+        if (wall && slope > 1.0f) {
+            float keep = std::min(1.f / std::sqrt(1 + slope * slope) + 0.3f, 1.f);
+            s.vel.y = std::min(s.speed * slope, 10.f);
+            s.vel.x *= keep; s.vel.z *= keep;
             s.state = S_AIR;
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE;
+            s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
+            break;
+        }
+        if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
+        if (ground < s.pos.y - 0.3f) {
+            // rolled off an edge — keep the slope's vertical velocity component
+            // (launch off kicker lips / air out of quarter pipes)
+            Vec3 n = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
+            float t = -(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f);
+            float keep = std::min(1.f / std::sqrt(1 + t * t) + 0.3f, 1.f);
+            s.vel.y = clampf(s.speed * t, -10.f, 10.f);
+            s.vel.x *= keep; s.vel.z *= keep;
+            s.state = S_AIR;
+            s.airTime = 0; s.fallStart = s.pos.y;
+            s.trickWindow = 0.25f;
+            s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+            s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
         } else {
             s.pos.y = ground;
         }
@@ -357,10 +577,29 @@ void Game::update(const Input& in, float dt) {
         s.vel.y -= GRAV * dt;
         // trick input
         if (s.flip == F_NONE) {
-            if (in.trick[0]) startFlip(F_KICK);
-            else if (in.trick[1]) startFlip(F_HEEL);
-            else if (in.trick[2]) startFlip(F_SHOVE);
-            else if (in.trick[3]) startFlip(F_TREFLIP);
+            // chord window: arrows pressed within 220ms of each other count as
+            // combos; a lone arrow waits 180ms for a partner before firing
+            for (int i = 0; i < 4; i++) {
+                if (in.trick[i] && s.arrowT[i] < 0) s.arrowT[i] = now;
+                if (!in.trick[i] && s.arrowT[i] >= 0 && now - s.arrowT[i] > 0.22f) s.arrowT[i] = -1;
+            }
+            auto act = [&](int i) { return s.arrowT[i] >= 0 && now - s.arrowT[i] <= 0.22f; };
+            bool L = act(0), R = act(1), D = act(2), U = act(3);
+            int n = (L?1:0) + (R?1:0) + (D?1:0) + (U?1:0);
+            int first = L ? 0 : R ? 1 : D ? 2 : 3;
+            Flip pick = F_NONE;
+            if (L && R) pick = F_IMPOSSIBLE;
+            else if (D && U) pick = F_BIGSPIN;
+            else if (L && D) pick = F_VARIALKICK;
+            else if (R && D) pick = F_VARIALHEEL;
+            else if (L && U) pick = F_HARD;
+            else if (R && U) pick = F_INWARD;
+            else if (n == 1 && now - s.arrowT[first] > 0.18f)
+                pick = first == 0 ? F_KICK : first == 1 ? F_HEEL : first == 2 ? F_SHOVE : F_TREFLIP;
+            if (pick != F_NONE) {
+                startFlip(pick);
+                for (int i = 0; i < 4; i++) s.arrowT[i] = -1;
+            }
         }
         // flip animation
         if (s.flip != F_NONE && s.flipPhase < 1.f) {
@@ -371,6 +610,12 @@ void Game::update(const Input& in, float dt) {
             case F_HEEL:    s.boardRoll = ph * 6.283f; break;
             case F_SHOVE:   s.boardSpin = ph * 3.1416f; break;
             case F_TREFLIP: s.boardRoll = -ph * 6.283f; s.boardSpin = ph * 6.283f; break;
+            case F_VARIALKICK: s.boardRoll = -ph * 6.283f; s.boardSpin = ph * 3.1416f; break;
+            case F_HARD:       s.boardRoll = -ph * 6.283f; s.boardSpin = -ph * 3.1416f; break;
+            case F_VARIALHEEL: s.boardRoll = ph * 6.283f; s.boardSpin = -ph * 3.1416f; break;
+            case F_INWARD:     s.boardRoll = ph * 6.283f; s.boardSpin = ph * 3.1416f; break;
+            case F_IMPOSSIBLE: s.boardRoll = ph * 6.283f; s.boardSpin = ph * 6.283f; s.boardRoll += ph * 1.2f; break;
+            case F_BIGSPIN:    s.boardSpin = ph * 6.283f; break;
             default: break;
             }
         }
@@ -386,20 +631,137 @@ void Game::update(const Input& in, float dt) {
             s.trickName = gn; s.trickT = 0.4f;
             s.lineScore += (int)(70 * dt * s.mult);
         }
+        // aerial rotation (A/D): FS/BS 180s, 360s, ... scored at landing
+        s.yaw += steer * 4.4f * dt;
+        s.spinAmt += steer * 4.4f * dt;
         // move
-        Vec3 np = s.pos + s.vel * dt;
+        float preSpeed = std::hypot(s.vel.x, s.vel.z);
+        Vec3 want = s.pos + s.vel * dt;
+        Vec3 np = want;
         bool wall = world.collideWalls(np, s.vel);
+        Vec3 push = np - want;
+        if (wall && push.len2() > 1e-9f) s.wallN = push.normalized();
         s.pos = np;
-        if (wall) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
+        // wallride: touching a wall mid-air with speed rides it instead of bailing
+        if (s.wallRide > 0.f) {
+            s.wallRide -= dt;
+            s.vel.y = std::max(s.vel.y, -1.5f);
+            s.vel -= s.wallN * 1.6f * dt;                 // stay pressed to the wall
+            s.lean = s.wallSide * 0.7f;
+            if (s.wallRide <= 0.f) {
+                s.vel += s.wallN * 2.4f;                  // push off
+                s.wallN = {0, 0, 0};
+                score(150, "WALLRIDE");
+            }
+        }
+        if (wall && s.wallRide <= 0.f && preSpeed > 2.5f && s.airTime < 1.6f && push.len2() > 1e-9f) {
+            s.wallRide = 0.7f;
+            Vec3 fw2(std::cos(s.yaw), 0, std::sin(s.yaw));
+            Vec3 rightW = fw2.cross({0, 1, 0});
+            s.wallSide = (-s.wallN).dot(rightW) > 0 ? 1.f : -1.f;
+            s.vel.y = std::max(s.vel.y, 1.1f);            // hop up onto the wall
+            s.trickName = "WALLRIDE"; s.trickT = 0.7f;
+        }
+        // named gaps (Skate's gap list): fly through a zone once per air
+        {
+            static const struct { float x0, x1, z0, z1, y0; const char* name; int pts; } GAPS[] = {
+                { 80.f,  97.f,  30.f,  50.f, 1.2f, "MEGA GAP",      800},
+                { 15.5f, 24.5f, -6.f,   4.5f, 1.4f, "STAIR SET",     300},
+                { -6.f,   2.f,   12.f,  16.f, 1.7f, "OVER THE FUNBOX",200},
+                {-44.f, -24.f, -36.f, -16.f, 1.5f, "BOWL TRANSFER",  400},
+            };
+            for (int gi = 0; gi < 4; gi++) {
+                auto& gp = GAPS[gi];
+                if ((s.gapMask >> gi) & 1) continue;
+                if (s.pos.x > gp.x0 && s.pos.x < gp.x1 && s.pos.z > gp.z0 &&
+                    s.pos.z < gp.z1 && s.pos.y > gp.y0) {
+                    s.gapMask |= 1u << gi;
+                    score(gp.pts, gp.name);
+                    fx.dust(s.pos, 4, 0.6f);
+                }
+            }
+        }
+        // rising past a lip: walls only push, so vert airs clear the coping
+        if (wall && s.vel.y <= 0.5f && s.wallRide <= 0.f) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.25f);
         if (s.vel.y <= 0) {
-            // try grind first when crossing an edge lip
-            if (world.findGrindEdge(s.pos) >= 0 && s.pos.y < ground + 0.45f + 0.35f) {
-                tryGrind();
-                break;
+            // try grind first when crossing an edge lip — but only after a real
+            // pop, a long fall, or when actually traveling along the edge, so a
+            // plain roll-off/drop-in doesn't lock onto coping
+            int ge = world.findGrindEdge(s.pos);
+            if (ge >= 0 && s.grindLockout <= 0.f && s.pos.y < ground + 0.45f + 0.35f) {
+                auto& e = world.edges[ge];
+                Vec3 d = (e.b - e.a).normalized();
+                bool locked = s.popTimer > 0 || s.airTime > 0.4f ||
+                              std::abs(s.vel.x * d.x + s.vel.z * d.z) > 1.0f;
+                if (locked) { tryGrind(steer); break; }
             }
-            if (s.pos.y <= ground + 0.02f) land();
+            if (s.pos.y <= ground + 0.02f) {
+                // landing into a held manual keeps the line alive
+                if (in.manual || in.noseManual) {
+                    land(false, steer);
+                    if (s.state == S_GROUND) {
+                        s.manualDir = in.noseManual ? -1 : 1;
+                        s.state = S_MANUAL;
+                        s.balance = 0;
+                        s.trickName = s.manualDir > 0 ? "MANUAL" : "NOSE MANUAL";
+                        s.trickT = 1.2f;
+                    }
+                } else {
+                    land(true, steer);
+                }
+            }
         }
+        break;
+    }
+    case S_MANUAL: {
+        // released the key or ran out of speed: wheels drop, line banks
+        if (!(in.manual || in.noseManual) || s.speed < 0.3f) { endManual(); break; }
+        int dir = s.manualDir;
+        // balance creeps toward the lifted axle + noise; W lifts, S drops
+        s.balance += dir * 0.22f * dt + (randf(s.flailSeed) - 0.5f) * 1.0f * dt;
+        if (in.push)  s.balance += 1.9f * dt;
+        if (in.brake) s.balance -= 1.9f * dt;
+        if (s.balance * dir > 1.f) { bail(dir > 0 ? "LOOPED OUT" : "OVER THE NOSE"); break; }
+        if (s.balance * dir < -0.35f) { endManual(); break; } // wheels touched back down
+        // hop out onto the line
+        if (in.jump) { doOllie(0.4f); break; }
+        // steering + rolling (no pushing while up on the trucks)
+        float yawRate = steer * (0.9f + s.speed * 0.05f);
+        s.yaw += yawRate * dt;
+        s.lean = dampf(s.lean, steer * 0.3f + s.balance * -0.15f * dir, 6, dt);
+        Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        Vec3 a = Vec3(0, -GRAV, 0) - n * Vec3(0, -GRAV, 0).dot(n);
+        s.vel += a * dt;
+        float fr = 0.30f;
+        s.vel.x -= s.vel.x * fr * dt;
+        s.vel.z -= s.vel.z * fr * dt;
+        s.vel.y = 0;
+        // move (same wall/ground logic as rolling)
+        Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
+        Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
+        bool wall = world.collideWalls(np, s.vel);
+        s.pos.x = np.x; s.pos.z = np.z;
+        float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        if (slope > 0.7f) { endManual(); break; } // transitions drop the manual
+        if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
+        if (ground < s.pos.y - 0.3f) {
+            Vec3 on = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
+            s.vel.y = clampf(-(s.vel.x * on.x + s.vel.z * on.z) / std::max(on.y, 0.3f), -10.f, 10.f);
+            s.state = S_AIR;
+            s.airTime = 0; s.fallStart = s.pos.y;
+            s.trickWindow = 0.25f;
+            s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+            s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
+            break;
+        }
+        s.pos.y = ground;
+        // ticking score keeps the combo window open
+        s.lineScore += (int)(60.f * dt * s.mult);
+        s.comboT = 3.f;
+        s.trickName = dir > 0 ? "MANUAL" : "NOSE MANUAL";
+        s.trickT = 0.5f;
         break;
     }
     case S_GRIND: {
@@ -497,7 +859,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     bool bail_ = (s.state == S_BAIL);
     float tuck = air ? clampf(s.airTime * 3.f, 0, 1) * 0.55f : 0;
     if (s.flip != F_NONE) tuck = 0.7f;
-    float hipH = (0.95f - cr * 0.32f) + (air ? 0.15f : 0.f);
+    float hipH = (0.95f - cr * 0.32f) + (air ? 0.15f : 0.f) - tuck * 0.10f;
     Vec3 hipPos = s.pos + Vec3(0, bail_ ? 0.35f : hipH, 0);
     if (bail_) {
         // ragdoll-ish tumble: body pitched over, flailing
@@ -507,6 +869,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     Vec3 bodyUp(0, 1, 0);
     Vec3 leanF = f * (cr * 0.10f + (air ? 0.02f : 0.f)) + rgt * (s.lean * 0.12f);
     if (s.state == S_GRIND) leanF = leanF + rgt * (s.balance * 0.1f);
+    if (s.state == S_MANUAL) leanF = leanF - f * (0.14f * s.manualDir) + rgt * (s.balance * 0.06f);
     if (bail_) leanF = f * 0.6f + rgt * 0.3f;
     Vec3 neck = hipPos + bodyUp * 0.46f + leanF;
     Vec3 head = neck + bodyUp * 0.17f;
@@ -540,6 +903,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     Material denim{tex.denim, 1.f, {1,1,1}, 0.1f, 14.f, 0.9f, 0.f, 0.f};
     Material skin{0, 1.f, {0.78f, 0.58f, 0.44f}, 0.15f, 20.f, 0.9f, 0.f, 0.f};
     Material shoe{0, 1.f, {0.9f, 0.9f, 0.88f}, 0.3f, 40.f, 0.9f, 0.05f, 0.f};
+    Material sole{0, 1.f, {0.22f, 0.18f, 0.15f}, 0.2f, 30.f, 0.9f, 0.f, 0.f};
     Material cap{0, 1.f, {0.12f, 0.14f, 0.18f}, 0.2f, 30.f, 0.9f, 0.f, 0.f};
 
     // thighs + shins + shoes
@@ -549,11 +913,15 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     out.push_back({&mCapsule, capsuleXform(kneeR, ankR, 0.062f), denim});
     for (int ft = 0; ft < 2; ft++) {
         Vec3 fp = ft == 0 ? footL : footR;
-        Mat4 sm = Mat4::translation(fp + Vec3(0, 0.035f, 0)) *
-                  Mat4::rotateY(s.yaw + (ft == 0 ? 0.15f : -0.15f));
-        sm = Mat4::mul(sm, Mat4::scale({0.27f, 0.09f, 0.105f}));
-        out.push_back({&mBox, sm, shoe});
+        float ry = s.yaw + (ft == 0 ? 0.15f : -0.15f);
+        // gum sole + white upper
+        Mat4 so = Mat4::translation(fp + Vec3(0, 0.012f, 0)) * Mat4::rotateY(ry);
+        out.push_back({&mBox, Mat4::mul(so, Mat4::scale({0.29f, 0.028f, 0.115f})), sole});
+        Mat4 sm = Mat4::translation(fp + Vec3(0, 0.055f, 0)) * Mat4::rotateY(ry);
+        out.push_back({&mBox, Mat4::mul(sm, Mat4::scale({0.27f, 0.075f, 0.105f})), shoe});
     }
+    // hips (denim) so the shirt reads as a shirt over pants
+    out.push_back({&mCapsule, capsuleXform(hipPos - Vec3(0, 0.10f, 0), hipPos + Vec3(0, 0.07f, 0), 0.115f), denim});
     // torso + head + cap
     out.push_back({&mCapsule, capsuleXform(hipPos + Vec3(0, 0.05f, 0), neck, 0.125f), shirt});
     out.push_back({&mSphere, Mat4::mul(Mat4::translation(head),
@@ -583,7 +951,8 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         handL = shoL + Vec3(-0.25f, -0.28f, 0.15f) + f * 0.1f;
     } else {
         float swing = s.pushAnim > 0 ? std::sin((1 - s.pushAnim / 0.75f) * 6.28f) * 0.3f : 0;
-        float outAmt = 0.22f + std::abs(s.lean) * 0.35f + (s.state == S_GRIND ? 0.15f : 0);
+        float outAmt = 0.22f + std::abs(s.lean) * 0.35f +
+                       (s.state == S_GRIND ? 0.15f : 0) + (s.state == S_MANUAL ? 0.22f : 0);
         handL = shoL + (rgt * -outAmt) + Vec3(0, -0.30f + cr * -0.05f, 0) + f * (0.08f + swing);
         handR = shoR + (rgt * outAmt) + Vec3(0, -0.30f + cr * -0.05f, 0) + f * (0.05f - swing);
         if (s.state == S_GRIND) {
@@ -602,6 +971,10 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     out.push_back({&mCapsule, capsuleXform(elbL, handL, 0.045f), skin});
     out.push_back({&mCapsule, capsuleXform(shoR, elbR, 0.055f), shirt});
     out.push_back({&mCapsule, capsuleXform(elbR, handR, 0.045f), skin});
+    for (int hd = 0; hd < 2; hd++) {
+        Vec3 hp = hd == 0 ? handL : handR;
+        out.push_back({&mSphere, Mat4::mul(Mat4::translation(hp), Mat4::scale({0.052f, 0.06f, 0.045f})), skin});
+    }
 
     // bail: draw loose board separately
     if (s.state == S_BAIL) drawBoard(out, bm, true);
