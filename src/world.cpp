@@ -613,5 +613,26 @@ void World::build(const TexSet& tex) {
         bw.box({-73.4f, 0.5f, 8}, {0.4f, 0.5f, 56});
         cx.add(bw, {tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f});
     }
+    // graffiti decals: spray-painted tags layered on the big flat concrete/
+    // wood walls — the Port Carverton vibe lives on these
+    {
+        auto& gq = cx.mb();
+        gq.setColor({1, 1, 1});
+        // quad centered at ct, spanning w x h, in the plane perpendicular to n
+        auto decal = [&](const Vec3& ct, float wdt, float hgt, const Vec3& n) {
+            Vec3 t = (std::abs(n.y) < 0.9f ? n.cross(Vec3(0,1,0)) : n.cross(Vec3(1,0,0))).normalized();
+            Vec3 b = n.cross(t).normalized();
+            Vec3 p0 = ct - t * (wdt/2) - b * (hgt/2), p1 = ct + t * (wdt/2) - b * (hgt/2);
+            Vec3 p2 = ct + t * (wdt/2) + b * (hgt/2), p3 = ct - t * (wdt/2) + b * (hgt/2);
+            gq.quad(p0, p1, p2, p3, n, 1.f, 1.f);
+        };
+        decal({49.97f, 3.4f, 40}, 9.f, 5.f, {-1, 0, 0});      // mega tower west face
+        decal({53, 3.2f, 50.03f}, 5.f, 4.5f, {0, 0, 1});      // tower south face
+        decal({97.97f, 3.0f, 40}, 8.f, 4.5f, {-1, 0, 0});     // mega deck west face
+        decal({-3, 1.4f, 21.03f}, 6.f, 2.4f, {0, 0, 1});      // plateau wall behind ledges
+        decal({14, 1.6f, -8.03f}, 5.f, 2.6f, {0, 0, -1});     // bank wall face
+        decal({-14.03f, 1.5f, 10}, 5.5f, 2.6f, {-1, 0, 0});   // plaza west wall
+        cx.add(gq, {tex.graffiti, 1.f, {1,1,1}, 0.1f, 12.f, 1.f, 0.f, 0.f}, false);
+    }
     cx.finish();
 }

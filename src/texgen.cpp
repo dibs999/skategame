@@ -23,6 +23,7 @@ static float vnoise(float x, float y, float period) {
     return lerpf(lerpf(at(xi, yi), at(xi + 1, yi), sx),
                  lerpf(at(xi, yi + 1), at(xi + 1, yi + 1), sx), sy);
 }
+static GLuint genGraffiti(int w);
 static float fbm2(float x, float y, float period, int oct) {
     float v = 0, a = 0.5f, p = period;
     for (int i = 0; i < oct; i++) {
@@ -374,6 +375,72 @@ static GLuint genWater(int w) {
     return finish(img, w, w);
 }
 
+static GLuint genGraffiti(int w) {
+    // weathered concrete base + layered spray-paint bubbles, arcs and drips
+    auto img = base(w, w, 152, 148, 142);
+    for (int y = 0; y < w; y++)
+        for (int x = 0; x < w; x++) {
+            float u = x / (float)w, v = y / (float)w;
+            float n = fbm2(u * 20, v * 20, 20, 4) - 0.5f;
+            unsigned char* p = &img[(y * w + x) * 4];
+            float tt = 1.f + n * 0.22f;
+            for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)clampf(p[cc] * tt, 0, 255);
+        }
+    unsigned seed = 77;
+    static const unsigned char COLS[6][3] = {
+        {232, 44, 120}, {40, 190, 232}, {250, 158, 30}, {120, 220, 60}, {168, 84, 240}, {250, 240, 60}};
+    // big overlapping spray bubbles with dark outlines, like throw-up letters
+    for (int b = 0; b < 9; b++) {
+        // letters sit in loose rows on a shared baseline, overlapping like a throw-up
+        float row = b < 5 ? 0.34f : 0.62f;
+        float cx = 0.12f + (b % 5) * 0.16f + randf(seed) * 0.05f;
+        float cy = row + (randf(seed) - 0.5f) * 0.05f;
+        float rx = 0.07f + randf(seed) * 0.06f, ry = rx * (0.9f + randf(seed) * 0.5f);
+        int col = (int)(randf(seed) * 6) % 6;
+        for (int y = 0; y < w; y++)
+            for (int x = 0; x < w; x++) {
+                float u = x / (float)w - cx, v = (y / (float)w - cy) * 1.0f;
+                float d = (u * u) / (rx * rx) + (v * v) / (ry * ry);
+                if (d > 1.3f) continue;
+                unsigned char* p = &img[(y * w + x) * 4];
+                if (d > 1.0f) { // outline
+                    for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)(p[cc] * 0.35f);
+                } else {
+                    float edge = clampf((1.f - d) * 3.f, 0.f, 1.f);   // soft spray edge
+                    float spk = 0.85f + 0.3f * fbm2(x * 0.2f, y * 0.2f, 16, 2);
+                    for (int cc = 0; cc < 3; cc++)
+                        p[cc] = (unsigned char)lerpf(p[cc], clampf(COLS[col][cc] * spk, 0, 255), edge * 0.9f);
+                }
+            }
+        // paint drips below the blob
+        int nd = 2 + (int)(randf(seed) * 3);
+        for (int dr = 0; dr < nd; dr++) {
+            int dx = (int)((cx - rx * 0.5f + randf(seed) * rx) * w);
+            int sy = (int)((cy + ry * 0.7f) * w);
+            int len = 6 + (int)(randf(seed) * 26);
+            for (int s = 0; s < len && sy + s < w; s++) {
+                unsigned char* p = &img[((sy + s) * w + dx) * 4];
+                float k = 0.55f * (1.f - s / (float)len);
+                for (int cc = 0; cc < 3; cc++)
+                    p[cc] = (unsigned char)lerpf(p[cc], (float)COLS[col][cc], k);
+            }
+        }
+    }
+    // white highlight streaks on top of letters
+    strokes(img, w, w, 22, 255, 255, 255, 90, seed, 30, true);
+    // grime re-weathering so it sits into the wall
+    for (int y = 0; y < w; y++)
+        for (int x = 0; x < w; x++) {
+            float g = fbm2(x / (float)w * 7, y / (float)w * 7, 7, 4);
+            if (g > 0.62f) {
+                unsigned char* p = &img[(y * w + x) * 4];
+                float k = (g - 0.62f) * 0.9f;
+                for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 105, k);
+            }
+        }
+    return finish(img, w, w);
+}
+
 void generateAllTextures(TexSet& t) {
     g_seed = 12345;
     t.concrete = genConcrete(512, 165, true, true);
@@ -390,5 +457,7 @@ void generateAllTextures(TexSet& t) {
     t.leaf = genLeaf(256);
     t.curbPaint = genCurbPaint(256);
     t.building = genBuilding(256);
+
     t.water = genWater(256);
+    t.graffiti = genGraffiti(256);
 }
