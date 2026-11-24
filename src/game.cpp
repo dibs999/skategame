@@ -387,6 +387,18 @@ void Game::update(const Input& in, float dt) {
     g_audio.grind = s.state == S_GRIND ? 0.5f : 0.f;
     s.pushAnim = std::max(0.f, s.pushAnim - dt);
     s.trickT = std::max(0.f, s.trickT - dt);
+    if (in.runToggle) {
+        s.runTimer = 120.f;
+        s.runBase = s.totalScore + s.lineScore;
+        s.trickName = "SCORE ATTACK"; s.trickT = 2.0f;
+    }
+    if (s.runTimer > 0.f) {
+        s.runTimer -= dt;
+        if (s.runTimer <= 0.f) {
+            s.lastRun = s.totalScore + s.lineScore - s.runBase;
+            s.trickName = "TIME!"; s.trickT = 4.f;
+        }
+    }
     if (s.trickT <= 0) s.trickName.clear();
     s.popTimer = std::max(0.f, s.popTimer - dt);
     if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0 && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); } }

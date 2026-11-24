@@ -14,6 +14,7 @@ struct HUD {
         Vec3 white{0.95f, 0.95f, 0.92f};
         Vec3 dim{0.6f, 0.62f, 0.65f};
         Vec3 accent{1.0f, 0.55f, 0.15f};
+        Vec3 red{1.0f, 0.3f, 0.2f};
         Vec3 shad{0.02f, 0.02f, 0.03f};
         float z = 0;
         // drop-shadowed text: dark copy offset down-right, then the glyph
@@ -50,6 +51,15 @@ struct HUD {
         // total score top-left
         snprintf(buf, sizeof buf, "TOTAL %d", s.totalScore + s.lineScore);
         text(buf, 18 * u, 20 * u, 2.6f * u, dim);
+        // score-attack run timer + running points, top-center
+        if (s.runTimer > 0.f) {
+            int sec = (int)s.runTimer;
+            snprintf(buf, sizeof buf, "RUN %d   %d:%02d", s.totalScore + s.lineScore - s.runBase, sec / 60, sec % 60);
+            textBold(buf, W / 2 - font.textWidth(buf, 2.8f * u) / 2, 20 * u, 2.8f * u, sec < 10 ? red : accent);
+        } else if (s.lastRun > 0) {
+            snprintf(buf, sizeof buf, "LAST RUN %d", s.lastRun);
+            text(buf, 18 * u, 44 * u, 2.2f * u, dim);
+        }
 
         // speedometer bottom-right
         float kph = s.speed * 3.6f;

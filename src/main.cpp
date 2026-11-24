@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     float camRoll = 0;
 
     Input in;
-    bool prevJump = false, prevSet = false, prevGo = false, prevSpot[5] = {};
+    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevSpot[5] = {};
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
     double perfFreq = (double)SDL_GetPerformanceFrequency();
@@ -140,6 +140,8 @@ int main(int argc, char** argv) {
         in.noseManual = k[SDL_SCANCODE_V];
         in.setMarker = k[SDL_SCANCODE_M] && !prevSet;
         in.goMarker = k[SDL_SCANCODE_T] && !prevGo;
+        in.runToggle = k[SDL_SCANCODE_O] && !prevRun;
+        prevRun = k[SDL_SCANCODE_O];
         in.spot = -1;
         for (int i = 0; i < 5; i++)
             if (k[SDL_SCANCODE_1 + i] && !prevSpot[i]) in.spot = i;
@@ -156,7 +158,7 @@ int main(int argc, char** argv) {
             game.update(in, dt);
             rem -= dt;
         }
-        in.setMarker = in.goMarker = false; // edge-triggered consumed
+        in.setMarker = in.goMarker = in.runToggle = false; // edge-triggered consumed
         in.spot = -1;
 
         // ---------- camera: low "filmer" cam ----------

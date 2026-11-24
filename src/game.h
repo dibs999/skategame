@@ -18,7 +18,9 @@ struct Input {
     bool grab[4] = {false, false, false, false};  // Q,E,F,G in air
     bool manual = false, noseManual = false;      // R / V hold
     bool setMarker = false, goMarker = false;
-    int spot = -1;          // 1-5 teleport to named spots
+    int spot = -1;
+    bool runToggle = false;          // O: start a 2-minute Score Attack
+    // 1-5 teleport to named spots via 'spot'
 };
 
 struct Particle {
@@ -85,6 +87,9 @@ struct Skater {
     float comboT = 0;
     std::string trickName;
     std::string lineTricks;   // "+ "-joined chain of tricks in the current line
+    float runTimer = -1.f;    // >0 while a Score Attack run is live
+    int runBase = 0;          // totalScore at run start
+    int lastRun = 0;          // most recent finished run's points
     float trickT = 0;
     bool pendingLand = false;
     float speed = 0;
