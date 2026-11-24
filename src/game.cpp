@@ -157,6 +157,12 @@ void Game::score(int pts, const char* name) {
     s.comboT = 3.0f;
     s.trickName = name;
     s.trickT = 2.2f;
+    // chain the name into the running line readout, keeping the last 4 entries
+    if (!s.lineTricks.empty()) s.lineTricks += " + ";
+    s.lineTricks += name;
+    int seps = 0;
+    for (char c : s.lineTricks) if (c == '+') seps++;
+    if (seps >= 4) s.lineTricks = s.lineTricks.substr(s.lineTricks.find(" + ") + 3);
 }
 
 void Game::doOllie(float power) {
@@ -185,10 +191,7 @@ void Game::startFlip(Flip f) {
     default: break;
     }
     int pts = f == F_TREFLIP ? 500 : (f == F_SHOVE ? 250 : 300);
-    s.lineScore += pts * s.mult;
-    s.mult = std::min(s.mult + 1, 9);
-    s.comboT = 3.0f;
-    s.trickName = n; s.trickT = 2.2f;
+    score(pts, n);
 }
 
 static const char* GRIND_NAMES[] = {"50-50", "BOARDSLIDE", "SMITH GRIND", "CROOKED", "LIPSLIDE"};
@@ -257,7 +260,7 @@ void Game::bail(const char* text) {
     s.looseBoard.pos = s.pos + Vec3(0, 0.12f, 0);
     s.looseBoard.vel = s.vel * 0.7f + Vec3(randf(s.flailSeed) * 2 - 1, 2.5f, randf(s.flailSeed) * 2 - 1);
     s.looseBoard.spin = 0;
-    s.lineScore = 0;
+    s.lineScore = 0; s.lineTricks.clear();
     s.mult = 1;
     s.grindEdge = -1;
     shake = std::max(shake, 0.8f);
@@ -271,7 +274,7 @@ void Game::endManual() {
     s.balance = 0;
     fx.dust(s.pos, 3, 0.5f);
     // exiting the manual is the landing — bank the line
-    if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
+    if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); }
 }
 
 void Game::land(bool bankLine, float steer) {
@@ -320,7 +323,7 @@ void Game::land(bool bankLine, float steer) {
         bankLine = false;
     }
     // bank the line
-    if (bankLine && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
+    if (bankLine && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); }
 }
 
 void Game::setMarkerHere() {
@@ -335,7 +338,7 @@ void Game::teleportMarker() {
     s.yaw = markerYaw;
     s.vel = {0, 0, 0};
     s.state = S_GROUND;
-    s.lineScore = 0; s.mult = 1;
+    s.lineScore = 0; s.mult = 1; s.lineTricks.clear();
     flash = 0.25f;
 }
 
@@ -354,7 +357,7 @@ void Game::teleportSpot(int i) {
     s.yaw = sp.yaw;
     s.vel = {0, 0, 0};
     s.state = S_GROUND;
-    s.lineScore = 0; s.mult = 1;
+    s.lineScore = 0; s.mult = 1; s.lineTricks.clear();
     s.trickName = std::string("SPOT: ") + sp.name;
     s.trickT = 1.6f;
     flash = 0.25f;
@@ -382,7 +385,7 @@ void Game::update(const Input& in, float dt) {
     s.trickT = std::max(0.f, s.trickT - dt);
     if (s.trickT <= 0) s.trickName.clear();
     s.popTimer = std::max(0.f, s.popTimer - dt);
-    if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0 && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; } }
+    if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0 && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; s.lineTricks.clear(); } }
     shake = dampf(shake, 0, 6, dt);
     flash = dampf(flash, 0, 7, dt);
     s.crouchVis = dampf(s.crouchVis, s.crouch, 12, dt);

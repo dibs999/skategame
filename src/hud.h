@@ -34,6 +34,10 @@ struct HUD {
             textBold(s.trickName, tx, ty, 3.4f * u, white);
             ty += 0;
         }
+        // running trick chain of the current line (Skate 3 bottom readout)
+        if (!s.lineTricks.empty() && s.lineScore > 0) {
+            text(s.lineTricks, tx, ty - 26 * u, 1.9f * u, dim);
+        }
         // line score + multiplier under it
         char buf[64];
         if (s.lineScore > 0) {

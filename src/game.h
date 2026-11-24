@@ -84,6 +84,7 @@ struct Skater {
     int lineScore = 0, totalScore = 0, mult = 1;
     float comboT = 0;
     std::string trickName;
+    std::string lineTricks;   // "+ "-joined chain of tricks in the current line
     float trickT = 0;
     bool pendingLand = false;
     float speed = 0;
