@@ -710,6 +710,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     Material denim{tex.denim, 1.f, {1,1,1}, 0.1f, 14.f, 0.9f, 0.f, 0.f};
     Material skin{0, 1.f, {0.78f, 0.58f, 0.44f}, 0.15f, 20.f, 0.9f, 0.f, 0.f};
     Material shoe{0, 1.f, {0.9f, 0.9f, 0.88f}, 0.3f, 40.f, 0.9f, 0.05f, 0.f};
+    Material sole{0, 1.f, {0.22f, 0.18f, 0.15f}, 0.2f, 30.f, 0.9f, 0.f, 0.f};
     Material cap{0, 1.f, {0.12f, 0.14f, 0.18f}, 0.2f, 30.f, 0.9f, 0.f, 0.f};
 
     // thighs + shins + shoes
@@ -719,11 +720,15 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     out.push_back({&mCapsule, capsuleXform(kneeR, ankR, 0.062f), denim});
     for (int ft = 0; ft < 2; ft++) {
         Vec3 fp = ft == 0 ? footL : footR;
-        Mat4 sm = Mat4::translation(fp + Vec3(0, 0.035f, 0)) *
-                  Mat4::rotateY(s.yaw + (ft == 0 ? 0.15f : -0.15f));
-        sm = Mat4::mul(sm, Mat4::scale({0.27f, 0.09f, 0.105f}));
-        out.push_back({&mBox, sm, shoe});
+        float ry = s.yaw + (ft == 0 ? 0.15f : -0.15f);
+        // gum sole + white upper
+        Mat4 so = Mat4::translation(fp + Vec3(0, 0.012f, 0)) * Mat4::rotateY(ry);
+        out.push_back({&mBox, Mat4::mul(so, Mat4::scale({0.29f, 0.028f, 0.115f})), sole});
+        Mat4 sm = Mat4::translation(fp + Vec3(0, 0.055f, 0)) * Mat4::rotateY(ry);
+        out.push_back({&mBox, Mat4::mul(sm, Mat4::scale({0.27f, 0.075f, 0.105f})), shoe});
     }
+    // hips (denim) so the shirt reads as a shirt over pants
+    out.push_back({&mCapsule, capsuleXform(hipPos - Vec3(0, 0.10f, 0), hipPos + Vec3(0, 0.07f, 0), 0.115f), denim});
     // torso + head + cap
     out.push_back({&mCapsule, capsuleXform(hipPos + Vec3(0, 0.05f, 0), neck, 0.125f), shirt});
     out.push_back({&mSphere, Mat4::mul(Mat4::translation(head),
