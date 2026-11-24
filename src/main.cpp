@@ -274,6 +274,7 @@ int main(int argc, char** argv) {
             lit.setF("uAO", d.mat.ao);
             lit.setF("uMetal", d.mat.metal);
             lit.setF("uEmissive", d.mat.emissive);
+            lit.setVec3("uTint", d.mat.color);
             if (d.mat.tex) {
                 glBindTexture(GL_TEXTURE_2D, d.mat.tex);
                 lit.setI("uTex", 0);

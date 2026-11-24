@@ -50,6 +50,7 @@ uniform float uAO;
 uniform float uMetal;
 uniform float uEmissive;
 uniform float uUseTex;
+uniform vec3 uTint;
 out vec4 fragColor;
 
 float shadowPCF(vec4 sc){
@@ -67,7 +68,7 @@ float shadowPCF(vec4 sc){
 }
 
 void main(){
-    vec3 base = vColor.rgb;
+    vec3 base = vColor.rgb * uTint;
     if(uUseTex > 0.5) base *= texture(uTex, vUV).rgb;
     vec3 N = normalize(vNormal);
     vec3 L = normalize(uSunDir);
