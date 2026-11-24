@@ -66,6 +66,7 @@ float World::supportHeight(float x, float z, float refY) const {
     return h;
 }
 
+
 Vec3 World::supportNormal(float x, float z, float refY) const {
     float h = terrainHeight(x, z);
     int win = -2; // -2 terrain, -1 box, >=0 field index
@@ -191,6 +192,8 @@ void World::build(const TexSet& tex) {
     addHF(69, MEGA_Z0, 73, MEGA_Z1, 0, 69, 5.5f); // kicker (46 deg lip)
     addHF(79, MEGA_Z0, 91, MEGA_Z1, 1, 4.0f, 0.0f); // landing
     addHF(91, MEGA_Z0, 98, MEGA_Z1, 0, 91, 7);   // big quarter (rises toward +x)
+    addHF(42, -38, 44.5f, -30, 2, 44.5f, 2.5f);  // mini ramp west transition
+    addHF(49.5f, -38, 52, -30, 0, 49.5f, 2.5f);  // mini ramp east transition
 
     // ---- solids ----
     solids.push_back({{PLAT_X0, 0, PLAT_Z0}, {PLAT_X1, PLAT_H, PLAT_Z1}}); // plateau
@@ -216,6 +219,8 @@ void World::build(const TexSet& tex) {
     solids.push_back({{-21, 0, 37.4f}, {-19, 0.8f, 38.8f}});               // barrier
     solids.push_back({{50, 0, MEGA_Z0}, {56, 8, MEGA_Z1}});                // mega tower
     solids.push_back({{98, 0, MEGA_Z0}, {106, 7, MEGA_Z1}});               // mega deck
+    solids.push_back({{39, 0, -38}, {42, 2.5f, -30}});                     // mini ramp west deck
+    solids.push_back({{52, 0, -38}, {55, 2.5f, -30}});                     // mini ramp east deck
     solids.push_back({{-30, 0, 18.4f}, {30, 0.14f, 19.0f}});               // curb
     solids.push_back({{-30, 0, -8.6f}, {10, 0.14f, -8.0f}});               // curb
     solids.push_back({{-73.5f, 0, -48}, {-72.5f, 1, 64}});                 // west wall
@@ -238,6 +243,9 @@ void World::build(const TexSet& tex) {
     cx.ledgeEdges(19, 35.4f, 21, 36.8f, 0.8f);
     edges.push_back({{-19, 0.55f, 6}, {-13, 0.55f, 6}, true});             // flatbar
     edges.push_back({{-46, 0.55f, 28}, {-40, 0.55f, 28}, true});           // lot rail
+    // mini ramp coping (grindable lips)
+    edges.push_back({{42, 2.52f, -38}, {42, 2.52f, -30}, false});
+    edges.push_back({{52, 2.52f, -38}, {52, 2.52f, -30}, false});
     {   // bowl coping ring
         for (int i = 0; i < 24; i++) {
             float a0 = i / 24.f * 6.2831853f, a1 = (i + 1) / 24.f * 6.2831853f;
@@ -398,6 +406,22 @@ void World::build(const TexSet& tex) {
         m.bank({-6, 0, 14}, {1, 0, 0}, 4, 2, 0.9f);
         m.bank({2, 0, 14}, {-1, 0, 0}, 4, 2, 0.9f);
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
+    }
+    // mini ramp (plywood transitions + decks + coping)
+    {
+        auto& m = cx.mb();
+        m.setColor({1, 1, 1});
+        m.quarterPipe({44.5f, 0, -34}, {-1, 0, 0}, 8, 2.5f, 12);  // west pipe
+        m.quarterPipe({49.5f, 0, -34}, {1, 0, 0}, 8, 2.5f, 12);   // east pipe
+        m.box({40.5f, 1.25f, -34}, {1.5f, 1.25f, 4});             // west deck
+        m.box({53.5f, 1.25f, -34}, {1.5f, 1.25f, 4});             // east deck
+        m.box({47, 0.06f, -34}, {2.6f, 0.06f, 4});                // flat bottom
+        cx.add(m, {tex.wood, 0.8f, {1,1,1}, 0.22f, 30.f, 1.f, 0.f, 0.f});
+        auto& cp = cx.mb();
+        cp.setColor({1, 1, 1});
+        cp.cylinder({42, 2.52f, -38}, {42, 2.52f, -30}, 0.045f, 10);
+        cp.cylinder({52, 2.52f, -38}, {52, 2.52f, -30}, 0.045f, 10);
+        cx.add(cp, {tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
     }
     // mega ramp (wooden surfaces)
     {

@@ -365,15 +365,33 @@ void Game::update(const Input& in, float dt) {
         s.vel.y = 0;
         // move
         Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
+        Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
         bool wall = world.collideWalls(np, s.vel);
         s.pos.x = np.x; s.pos.z = np.z;
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        // on a steep transition (slope > ~45 deg) a wall means a lip: launch
+        // up it instead of slamming into whatever sits behind the coping
+        if (wall && slope > 1.0f) {
+            float keep = std::min(1.f / std::sqrt(1 + slope * slope) + 0.3f, 1.f);
+            s.vel.y = std::min(s.speed * slope, 10.f);
+            s.vel.x *= keep; s.vel.z *= keep;
+            s.state = S_AIR;
+            s.airTime = 0; s.fallStart = s.pos.y;
+            s.trickWindow = 0.25f;
+            s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+            s.grab = G_NONE;
+            break;
+        }
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
         if (ground < s.pos.y - 0.3f) {
             // rolled off an edge — keep the slope's vertical velocity component
             // (launch off kicker lips / air out of quarter pipes)
             Vec3 n = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
-            s.vel.y = clampf(-(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f), -10.f, 10.f);
+            float t = -(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f);
+            float keep = std::min(1.f / std::sqrt(1 + t * t) + 0.3f, 1.f);
+            s.vel.y = clampf(s.speed * t, -10.f, 10.f);
+            s.vel.x *= keep; s.vel.z *= keep;
             s.state = S_AIR;
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
@@ -423,13 +441,20 @@ void Game::update(const Input& in, float dt) {
         Vec3 np = s.pos + s.vel * dt;
         bool wall = world.collideWalls(np, s.vel);
         s.pos = np;
-        if (wall) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
+        // rising past a lip: walls only push, so vert airs clear the coping
+        if (wall && s.vel.y <= 0.5f) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.25f);
         if (s.vel.y <= 0) {
-            // try grind first when crossing an edge lip
-            if (world.findGrindEdge(s.pos) >= 0 && s.pos.y < ground + 0.45f + 0.35f) {
-                tryGrind();
-                break;
+            // try grind first when crossing an edge lip — but only after a real
+            // pop, a long fall, or when actually traveling along the edge, so a
+            // plain roll-off/drop-in doesn't lock onto coping
+            int ge = world.findGrindEdge(s.pos);
+            if (ge >= 0 && s.pos.y < ground + 0.45f + 0.35f) {
+                auto& e = world.edges[ge];
+                Vec3 d = (e.b - e.a).normalized();
+                bool locked = s.popTimer > 0 || s.airTime > 0.4f ||
+                              std::abs(s.vel.x * d.x + s.vel.z * d.z) > 1.0f;
+                if (locked) { tryGrind(); break; }
             }
             if (s.pos.y <= ground + 0.02f) land();
         }
