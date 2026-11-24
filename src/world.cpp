@@ -613,6 +613,19 @@ void World::build(const TexSet& tex) {
         bw.box({-73.4f, 0.5f, 8}, {0.4f, 0.5f, 56});
         cx.add(bw, {tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f});
     }
+    // lamp posts: vertical rhythm against the sky, classic plaza furniture
+    {
+        auto& lp = cx.mb();
+        lp.setColor({1, 1, 1});
+        auto lamp = [&](float x, float z) {
+            lp.cylinder({x, 0, z}, {x, 5.6f, z}, 0.07f, 10);                  // pole
+            lp.cylinder({x, 5.6f, z}, {x + 0.9f, 5.9f, z}, 0.045f, 8);       // arm
+            lp.box({x + 1.0f, 5.85f, z}, {0.28f, 0.08f, 0.14f});             // head
+        };
+        lamp(-20, -14); lamp(-20, 18); lamp(6, -18); lamp(6, 20);
+        lamp(28, -14); lamp(28, 18); lamp(-44, 0); lamp(48, 24);
+        cx.add(lp, {tex.metal, 1.f, {0.28f, 0.30f, 0.33f}, 0.7f, 70.f, 1.f, 0.5f, 0.f});
+    }
     // traffic cones: bright orange color pops scattered as skate obstacles
     {
         auto& cn = cx.mb();
