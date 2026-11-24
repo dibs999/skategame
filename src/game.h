@@ -16,6 +16,7 @@ struct Input {
     bool jump = false;                     // quick pop / exit grind (Space)
     bool trick[4] = {false, false, false, false}; // arrows: L,R,Down,Up while airborne
     bool grab[4] = {false, false, false, false};  // Q,E,F,G in air
+    bool manual = false, noseManual = false;      // R / V hold
     bool setMarker = false, goMarker = false;
 };
 
@@ -35,7 +36,7 @@ struct Particles {
     void fill(SpriteBatch& sb) const;
 };
 
-enum SState { S_GROUND, S_AIR, S_GRIND, S_BAIL };
+enum SState { S_GROUND, S_AIR, S_GRIND, S_MANUAL, S_BAIL };
 enum Flip { F_NONE, F_KICK, F_HEEL, F_SHOVE, F_TREFLIP };
 enum Grab { G_NONE, G_INDY, G_MELON, G_NOSE, G_TAIL };
 
@@ -55,6 +56,7 @@ struct Skater {
     // air/trick
     float airTime = 0;
     float trickWindow = 0;  // time after pop to register a flip
+    float spinAmt = 0;      // radians rotated during current air
     Flip flip = F_NONE;
     float flipPhase = 0;    // 0..1 progress of flip anim
     float boardRoll = 0, boardSpin = 0; // displayed flip angles
@@ -67,6 +69,7 @@ struct Skater {
     float balance = 0;      // -1..1, |1| = bail
     float grindDist = 0;
     bool grindBoardslide = false;
+    int manualDir = 0;      // +1 manual (back trucks), -1 nose manual
     // bail
     float bailT = 0;
     std::string bailText;
@@ -107,7 +110,8 @@ struct Game {
     void tryGrind();
     void endGrind(bool popOut);
     void bail(const char* text);
-    void land();
+    void land(bool bankLine = true);
+    void endManual();
     void score(int pts, const char* name);
     void setMarkerHere();
     void teleportMarker();

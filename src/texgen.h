@@ -15,6 +15,7 @@ struct TexSet {
     GLuint bark = 0;
     GLuint leaf = 0;
     GLuint curbPaint = 0;     // white/yellow painted concrete (curbs)
+    GLuint building = 0;      // window-grid facade for backdrop towers
 };
 
 void generateAllTextures(TexSet& t);
