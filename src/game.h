@@ -74,6 +74,7 @@ struct Skater {
     int manualDir = 0;      // +1 manual (back trucks), -1 nose manual
     float revertT = 0;      // post-landing pivot
     int revertDir = 0;
+    unsigned gapMask = 0;   // gaps already hit this air
     // bail
     float bailT = 0;
     std::string bailText;

@@ -167,7 +167,7 @@ void Game::doOllie(float power) {
     s.trickWindow = 0.45f;
     s.fallStart = s.pos.y;
     s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-    s.grab = G_NONE; s.spinAmt = 0;
+    s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
     s.popTimer = 0.18f;
     fx.dust(s.pos, 4, 0.5f);
 }
@@ -236,14 +236,14 @@ void Game::endGrind(bool popOut) {
         s.trickWindow = 0.35f;
         s.fallStart = s.pos.y;
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-        s.grab = G_NONE; s.spinAmt = 0;
+        s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
     } else {
         s.state = S_AIR;
         s.airTime = 0.15f;
         s.trickWindow = 0.3f;
         s.fallStart = s.pos.y;
         s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-        s.spinAmt = 0;
+        s.spinAmt = 0; s.gapMask = 0;
     }
 }
 
@@ -365,9 +365,9 @@ void Game::update(const Input& in, float dt) {
     if (getenv("SKATE_DEBUGPOS")) {           // dev aid: dump state ~2x/sec
         static int dbg = 0;
         if (++dbg % 30 == 0)
-            fprintf(stderr, "POS %.1f %.1f %.1f st%d spd %.1f yaw %.2f sup %.2f\n",
+            fprintf(stderr, "POS %.1f %.1f %.1f st%d spd %.1f yaw %.2f sup %.2f fps %.0f\n",
                     s.pos.x, s.pos.y, s.pos.z, (int)s.state, s.speed, s.yaw,
-                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y));
+                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y), 1.f / dt);
     }
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
@@ -473,7 +473,7 @@ void Game::update(const Input& in, float dt) {
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE; s.spinAmt = 0;
+            s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
             break;
         }
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
@@ -489,7 +489,7 @@ void Game::update(const Input& in, float dt) {
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE; s.spinAmt = 0;
+            s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
         } else {
             s.pos.y = ground;
         }
@@ -537,6 +537,25 @@ void Game::update(const Input& in, float dt) {
         Vec3 np = s.pos + s.vel * dt;
         bool wall = world.collideWalls(np, s.vel);
         s.pos = np;
+        // named gaps (Skate's gap list): fly through a zone once per air
+        {
+            static const struct { float x0, x1, z0, z1, y0; const char* name; int pts; } GAPS[] = {
+                { 73.f,  79.f,  30.f,  50.f, 2.5f, "MEGA GAP",      800},
+                { 15.5f, 24.5f, -6.f,   4.5f, 1.4f, "STAIR SET",     300},
+                { -6.f,   2.f,   12.f,  16.f, 1.7f, "OVER THE FUNBOX",200},
+                {-44.f, -24.f, -36.f, -16.f, 1.5f, "BOWL TRANSFER",  400},
+            };
+            for (int gi = 0; gi < 4; gi++) {
+                auto& gp = GAPS[gi];
+                if ((s.gapMask >> gi) & 1) continue;
+                if (s.pos.x > gp.x0 && s.pos.x < gp.x1 && s.pos.z > gp.z0 &&
+                    s.pos.z < gp.z1 && s.pos.y > gp.y0) {
+                    s.gapMask |= 1u << gi;
+                    score(gp.pts, gp.name);
+                    fx.dust(s.pos, 4, 0.6f);
+                }
+            }
+        }
         // rising past a lip: walls only push, so vert airs clear the coping
         if (wall && s.vel.y <= 0.5f) { bail(s.speed > 6.f ? "SLAMMED INTO A WALL" : "CLIPPED A WALL"); break; }
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.25f);
@@ -609,7 +628,7 @@ void Game::update(const Input& in, float dt) {
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE; s.spinAmt = 0;
+            s.grab = G_NONE; s.spinAmt = 0; s.gapMask = 0;
             break;
         }
         s.pos.y = ground;
