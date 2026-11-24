@@ -97,6 +97,11 @@ void Game::init(const TexSet& t) {
         mFlag = f.build();
     }
     s.pos = {-10, 0, 4}; s.yaw = -0.4f;
+    // dev/screenshot override: SKATE_SPAWN="x,z,yaw[,y]" places the skater
+    if (const char* sp = getenv("SKATE_SPAWN")) {
+        int n = sscanf(sp, "%f,%f,%f,%f", &s.pos.x, &s.pos.z, &s.yaw, &s.pos.y);
+        if (n < 4) s.pos.y = world.supportHeight(s.pos.x, s.pos.z, 1e9f) + 0.05f; // on top of whatever is there
+    }
     s.state = S_GROUND;
 }
 
@@ -255,6 +260,18 @@ void Game::land() {
     if (impact > 17.f) { bail("SLAMMED HARD"); return; }
     s.state = S_GROUND;
     s.pos.y = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+    // landing on a downslope converts fall speed into forward speed
+    {
+        Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        Vec3 dh(n.x, 0, n.z);
+        float sl = dh.len();
+        Vec3 fwd(std::cos(s.yaw), 0, std::sin(s.yaw));
+        if (sl > 0.15f && (fwd.x * n.x + fwd.z * n.z) / sl > 0.3f) {
+            float tot = s.vel.len();
+            float sp = std::max(std::hypot(s.vel.x, s.vel.z), tot * 0.8f);
+            s.vel.x = fwd.x * sp; s.vel.z = fwd.z * sp;
+        }
+    }
     s.vel.y = 0;
     s.flip = F_NONE; s.grab = G_NONE;
     if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); }
@@ -282,6 +299,13 @@ void Game::teleportMarker() {
 
 void Game::update(const Input& in, float dt) {
     Skater& s = this->s;
+    if (getenv("SKATE_DEBUGPOS")) {           // dev aid: dump state ~2x/sec
+        static int dbg = 0;
+        if (++dbg % 30 == 0)
+            fprintf(stderr, "POS %.1f %.1f %.1f st%d spd %.1f yaw %.2f sup %.2f\n",
+                    s.pos.x, s.pos.y, s.pos.z, (int)s.state, s.speed, s.yaw,
+                    world.supportHeight(s.pos.x, s.pos.z, s.pos.y));
+    }
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
 
@@ -340,7 +364,10 @@ void Game::update(const Input& in, float dt) {
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
         if (ground < s.pos.y - 0.3f) {
-            // rolled off an edge
+            // rolled off an edge — keep the slope's vertical velocity component
+            // (launch off kicker lips / air out of quarter pipes)
+            Vec3 n = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
+            s.vel.y = clampf(-(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f), -10.f, 10.f);
             s.state = S_AIR;
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
