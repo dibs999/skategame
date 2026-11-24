@@ -211,6 +211,9 @@ void World::build(const TexSet& tex) {
     solids.push_back({{-4, 0, 12}, {0, 0.9f, 16}});                        // funbox
     solids.push_back({{-21.2f, 0, 19.6f}, {-19, 0.42f, 20.4f}});           // bench
     solids.push_back({{7, 0, 29.6f}, {9.2f, 0.42f, 30.4f}});               // bench
+    solids.push_back({{7.2f, 0, -22.6f}, {8.8f, 0.72f, -21.4f}});          // picnic tabletop
+    solids.push_back({{7.2f, 0, -23.3f}, {8.8f, 0.42f, -22.8f}});          // picnic seat S
+    solids.push_back({{7.2f, 0, -21.2f}, {8.8f, 0.42f, -20.7f}});          // picnic seat N
     solids.push_back({{-41.1f, 0, 8.9f}, {-38.9f, 0.55f, 11.1f}});         // planter
     solids.push_back({{38.9f, 0, -21.1f}, {41.1f, 0.55f, -18.9f}});        // planter
     solids.push_back({{-9.1f, 0, 34.9f}, {-6.9f, 0.55f, 37.1f}});          // planter
@@ -239,10 +242,12 @@ void World::build(const TexSet& tex) {
     cx.ledgeEdges(-4, 12, 0, 16, 0.9f);
     cx.ledgeEdges(-21.2f, 19.6f, -19, 20.4f, 0.42f);
     cx.ledgeEdges(7, 29.6f, 9.2f, 30.4f, 0.42f);
+    cx.ledgeEdges(7.2f, -22.6f, 8.8f, -21.4f, 0.72f);
     cx.ledgeEdges(-49, -9, -47, -7.6f, 0.8f);
     cx.ledgeEdges(19, 35.4f, 21, 36.8f, 0.8f);
     edges.push_back({{-19, 0.55f, 6}, {-13, 0.55f, 6}, true});             // flatbar
     edges.push_back({{-46, 0.55f, 28}, {-40, 0.55f, 28}, true});           // lot rail
+    addHF(-26, -14, -22, -10, 1, 0.f, 0.8f);                               // kicker ramp
     // mini ramp coping (grindable lips)
     edges.push_back({{42, 2.52f, -38}, {42, 2.52f, -30}, false});
     edges.push_back({{52, 2.52f, -38}, {52, 2.52f, -30}, false});
@@ -405,7 +410,25 @@ void World::build(const TexSet& tex) {
         m.setColor({1, 1, 1});
         m.bank({-6, 0, 14}, {1, 0, 0}, 4, 2, 0.9f);
         m.bank({2, 0, 14}, {-1, 0, 0}, 4, 2, 0.9f);
+        m.bank({-26, 0, -12}, {1, 0, 0}, 4, 4, 0.8f);   // kicker
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
+    }
+    // picnic table (wooden top + seats, metal legs)
+    {
+        auto& m = cx.mb();
+        m.setColor({1, 1, 1});
+        m.box({8, 0.72f, -22}, {0.85f, 0.035f, 0.65f});
+        m.box({8, 0.42f, -23.05f}, {0.85f, 0.03f, 0.14f});
+        m.box({8, 0.42f, -20.95f}, {0.85f, 0.03f, 0.14f});
+        cx.add(m, {tex.wood, 0.6f, {1,1,1}, 0.25f, 40.f, 1.f, 0.f, 0.f});
+        auto& lg = cx.mb();
+        lg.setColor({1, 1, 1});
+        for (float sx : {-1.f, 1.f}) {
+            lg.cylinder({8 + 0.55f * sx, 0, -22.45f}, {8 + 0.75f * sx, 0.7f, -21.7f}, 0.035f, 8);
+            lg.cylinder({8 + 0.55f * sx, 0, -21.55f}, {8 + 0.75f * sx, 0.7f, -22.3f}, 0.035f, 8);
+        }
+        lg.cylinder({7.3f, 0.5f, -22}, {8.7f, 0.5f, -22}, 0.03f, 8);        // brace
+        cx.add(lg, {tex.metal, 0.4f, {0.7f,0.72f,0.75f}, 0.5f, 90.f, 1.f, 0.4f, 0.f});
     }
     // mini ramp (plywood transitions + decks + coping)
     {
