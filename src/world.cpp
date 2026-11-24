@@ -401,6 +401,26 @@ void World::build(const TexSet& tex) {
         addCar(-44, 40, {0.10f, 0.14f, 0.30f});
         addCar(-27, 45, {0.72f, 0.72f, 0.74f});
     }
+    // kneeling filmer filming the ledge line
+    {
+        MeshBuilder fm;
+        Vec3 bp{-2.2f, 0, -6.4f};                       // base, faces the ledge
+        fm.setColor({0.30f, 0.32f, 0.36f});             // hoodie
+        fm.capsule(bp + Vec3{0, 0.72f, 0}, bp + Vec3{0, 1.18f, 0}, 0.16f, 10);   // torso
+        fm.setColor({0.16f, 0.20f, 0.28f});             // jeans
+        fm.capsule(bp + Vec3{-0.10f, 0.55f, 0.02f}, bp + Vec3{-0.10f, 0.28f, 0.34f}, 0.09f, 8); // kneel thigh L
+        fm.capsule(bp + Vec3{-0.10f, 0.28f, 0.34f}, bp + Vec3{-0.10f, 0.10f, 0.36f}, 0.07f, 8); // shin L down
+        fm.capsule(bp + Vec3{0.12f, 0.55f, -0.04f}, bp + Vec3{0.30f, 0.28f, -0.20f}, 0.09f, 8); // leg R bent
+        fm.capsule(bp + Vec3{0.30f, 0.28f, -0.20f}, bp + Vec3{0.36f, 0.06f, -0.42f}, 0.07f, 8); // shin R
+        fm.setColor({0.85f, 0.68f, 0.58f});             // skin
+        fm.sphere(bp + Vec3{0, 1.38f, 0}, 0.13f, 10, 8);
+        fm.capsule(bp + Vec3{-0.16f, 1.05f, 0.02f}, bp + Vec3{-0.06f, 1.20f, 0.42f}, 0.055f, 8); // arm L to cam
+        fm.capsule(bp + Vec3{0.16f, 1.05f, 0.02f}, bp + Vec3{0.10f, 1.20f, 0.42f}, 0.055f, 8);  // arm R
+        fm.setColor({0.05f, 0.05f, 0.07f});             // camera
+        fm.box(bp + Vec3{0.085f, 1.325f, 0.55f}, {0.065f, 0.045f, 0.11f});
+        cx.add(fm, {0, 1.f, {1, 1, 1}, 0.05f, 24.f, 1.f, 0.f, 0.f}, true);
+        solids.push_back({{bp.x - 0.3f, 0, bp.z - 0.3f}, {bp.x + 0.4f, 1.5f, bp.z + 0.5f}});
+    }
     // barriers + curbs (painted)
     {
         auto& pb = cx.mb();
