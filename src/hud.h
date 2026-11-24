@@ -114,7 +114,9 @@ struct HUD {
             text(buf, W - 18 * u - font.textWidth(buf, 2.0f * u), 62 * u, 2.0f * u, dim);
         }
         // controls hint first seconds (always small bottom-center)
-        const char* hint = "W PUSH  A/D CARVE+SPIN  CTRL OLLIE  SPC BONELESS  ARROWS TRICKS+COMBOS  Q/E/F/G GRAB  R/V MANUAL  M/T MARKER 1-5 SPOTS  O RUN  N DUSK  BKSP RESET";
-        text(hint, W / 2 - font.textWidth(hint, 1.6f * u) / 2, H - 22 * u, 1.6f * u, dim, 0.75f);
+        const char* hint = "W PUSH  A/D CARVE  CTRL OLLIE  ARROWS TRICKS  SPC BONELESS  Q/E/F/G GRAB  R/V MANUAL";
+        const char* hint2 = "M/T MARKER  1-5 SPOTS  O RUN  N DUSK  BKSP RESET";
+        text(hint, W / 2 - font.textWidth(hint, 2.0f * u) / 2, H - 40 * u, 2.0f * u, dim, 0.8f);
+        text(hint2, W / 2 - font.textWidth(hint2, 2.0f * u) / 2, H - 20 * u, 2.0f * u, dim, 0.8f);
     }
 };
