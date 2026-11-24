@@ -447,19 +447,26 @@ void World::build(const TexSet& tex) {
     }
     // backdrop: distant city blocks + ocean
     {
-        auto& m = cx.mb();
+        // backdrop towers in three material groups for skyline variety
         unsigned sd = 42;
+        MeshBuilder groups[3];
+        for (int i = 0; i < 3; i++) groups[i].setColor({1, 1, 1});
+        auto addTower = [&](float bx, float bz, float bh, float bs, int grp) {
+            groups[grp].box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+        };
         for (int i = 0; i < 14; i++) {
             float bx = -80 + randf(sd) * 200, bz = -80 - randf(sd) * 40;
             float bh = 12 + randf(sd) * 30, bs = 8 + randf(sd) * 10;
-            m.box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+            addTower(bx, bz, bh, bs, i % 3);
         }
         for (int i = 0; i < 10; i++) {
             float bx = -80 + randf(sd) * 200, bz = 78 + randf(sd) * 40;
             float bh = 10 + randf(sd) * 26, bs = 8 + randf(sd) * 10;
-            m.box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+            addTower(bx, bz, bh, bs, (i + 1) % 3);
         }
-        cx.add(m, {0, 1.f, {0.82f,0.84f,0.9f}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
+        cx.add(groups[0], {tex.building, 3.5f, {0.75f,0.82f,0.95f}, 0.15f, 24.f, 1.f, 0.25f, 0.f}, false); // glass towers
+        cx.add(groups[1], {tex.building, 2.6f, {1.0f,0.92f,0.80f}, 0.08f, 16.f, 1.f, 0.f, 0.f}, false);   // warm concrete
+        cx.add(groups[2], {0, 1.f, {0.82f,0.84f,0.9f}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);                // plain massing
         auto& oc = cx.mb();
         oc.setColor({0.15f, 0.4f, 0.62f});
         oc.quad({-200, -0.5f, 120}, {200, -0.5f, 120}, {200, -0.5f, 300}, {-200, -0.5f, 300}, {0, 1, 0}, 10, 10);
