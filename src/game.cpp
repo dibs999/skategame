@@ -509,15 +509,12 @@ void Game::update(const Input& in, float dt) {
         float scrub = std::abs(yawRate) * 0.05f;
         // friction + slope
         Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
-        Vec3 g(0, -GRAV, 0);
-        Vec3 a = g - n * g.dot(n);           // gravity along surface
-        s.vel += a * dt;
         // pumping: holding crouch while climbing a transition adds speed
         if (s.crouch > 0.5f && s.speed > 0.5f) {
             float up = -(f.x * n.x + f.z * n.z) / std::max(n.y, 0.3f);
             if (up > 0.05f) s.vel += f * std::min(up, 1.5f) * 1.6f * dt;
         }
-        float fr = 0.4f + scrub;
+        float fr = (n.y < 0.9f ? 0.05f : 0.12f) + scrub;   // wheels roll nearly free, even more so on smooth transitions
         if (in.brake) fr += 3.0f;
         if (sliding) {
             fr += 1.4f;
@@ -531,14 +528,32 @@ void Game::update(const Input& in, float dt) {
             Vec3 hv = s.vel * (1.f / std::max(s.speed, 0.01f));
             s.vel.x = hv.x * std::min(s.speed, 22.f); s.vel.z = hv.z * std::min(s.speed, 22.f);
         }
-        s.vel.y = 0;
+        // constrain velocity to the surface tangent plane (full 3D): project
+        // out the normal component and add gravity's tangential part. The
+        // projection rotates the velocity with the surface — horizontal speed
+        // converts to vertical on a kicker and back on a landing — while only
+        // ever removing energy through the constraint, never inventing it.
+        {
+            Vec3 n0 = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+            s.vel = s.vel - n0 * s.vel.dot(n0);
+            Vec3 gg(0, -GRAV, 0);
+            Vec3 at = gg - n0 * gg.dot(n0);
+            s.vel += at * dt;
+            float vl = s.vel.len();
+            if (vl > 30.f) s.vel = s.vel * (30.f / vl);
+        }
         // move
-        Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
+        Vec3 np = s.pos + s.vel * dt;
         Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
         float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
         bool wall = world.collideWalls(np, s.vel);
-        s.pos.x = np.x; s.pos.z = np.z;
-        float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        s.pos = np;
+        // on steep transitions the surface can rise fast enough per frame to
+        // escape the step-up window — widen it with horizontal speed so the
+        // kicker/QP climb doesn't drop support out from under the wheels
+        float upAllow = 0.3f;
+        if (sn.y < 0.85f) upAllow += std::hypot(s.vel.x, s.vel.z) * dt * 4.5f;
+        float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + upAllow);
         // on a steep transition (slope > ~45 deg) a wall means a lip: launch
         // up it instead of slamming into whatever sits behind the coping
         if (wall && slope > 1.0f) {
@@ -554,13 +569,17 @@ void Game::update(const Input& in, float dt) {
         }
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
         if (ground < s.pos.y - 0.3f) {
-            // rolled off an edge — keep the slope's vertical velocity component
-            // (launch off kicker lips / air out of quarter pipes)
             Vec3 n = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
             float t = -(s.vel.x * n.x + s.vel.z * n.z) / std::max(n.y, 0.3f);
-            float keep = std::min(1.f / std::sqrt(1 + t * t) + 0.3f, 1.f);
-            s.vel.y = clampf(s.speed * t, -10.f, 10.f);
-            s.vel.x *= keep; s.vel.z *= keep;
+            if (t < -0.12f && n.y < 0.92f && s.vel.y < 1.f) {
+                // steep continuous descent (roll-in, bank): stay pressed to the
+                // surface instead of separating — only crests/lips throw you
+                s.pos.y = ground;
+                break;
+            }
+            // rolled off an edge — keep the slope's vertical velocity component
+            // (launch off kicker lips / air out of quarter pipes)
+            (void)t;
             s.state = S_AIR;
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
@@ -742,7 +761,7 @@ void Game::update(const Input& in, float dt) {
         Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
         float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
         bool wall = world.collideWalls(np, s.vel);
-        s.pos.x = np.x; s.pos.z = np.z;
+        s.pos = np;
         float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
         if (slope > 0.7f) { endManual(); break; } // transitions drop the manual
         if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }

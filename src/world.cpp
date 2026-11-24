@@ -249,7 +249,7 @@ void World::build(const TexSet& tex) {
     addHF(0, 12, 2, 16, 1, 0.9f, 0.0f);          // funbox east bank
     addHF(56, MEGA_Z0, 64, MEGA_Z1, 2, 64, 8);   // mega roll-in (rises toward -x)
     addHF(69, MEGA_Z0, 73, MEGA_Z1, 0, 69, 5.5f); // kicker (46 deg lip)
-    addHF(79, MEGA_Z0, 91, MEGA_Z1, 1, 4.0f, 0.0f); // landing
+    addHF(77, MEGA_Z0, 91, MEGA_Z1, 1, 3.0f, 0.0f); // landing
     addHF(91, MEGA_Z0, 98, MEGA_Z1, 0, 91, 7);   // big quarter (rises toward +x)
     addHF(42, -38, 44.5f, -30, 2, 44.5f, 2.5f);  // mini ramp west transition
     addHF(49.5f, -38, 52, -30, 0, 49.5f, 2.5f);  // mini ramp east transition
@@ -564,7 +564,7 @@ void World::build(const TexSet& tex) {
         m.box({53, 4, zc}, {3, 4, mw / 2});                    // tower
         m.quarterPipe({64, 0, zc}, {-1, 0, 0}, mw, 8, 18);     // roll-in
         m.quarterPipe({69, 0, zc}, {1, 0, 0}, mw, 5.5f, 10, true, 0.81f); // kicker
-        m.bank({91, 0, zc}, {-1, 0, 0}, mw, 12, 4.0f);         // landing
+        m.bank({91, 0, zc}, {-1, 0, 0}, mw, 14, 3.0f);         // landing
         m.quarterPipe({91, 0, zc}, {1, 0, 0}, mw, 7, 18);      // big quarter
         m.box({102, 3.5f, zc}, {4, 3.5f, mw / 2});             // deck
         cx.add(m, {tex.wood, 0.5f, {1,1,1}, 0.25f, 32.f, 1.f, 0.f, 0.f});
