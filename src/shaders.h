@@ -82,7 +82,7 @@ void main(){
     vec3 R = reflect(-V, N);
     float fres = pow(1.0 - max(dot(N,V),0.0), 3.0);
     vec3 env = mix(vec3(0.55,0.62,0.70), vec3(0.85,0.90,1.0), R.y*0.5+0.5);
-    vec3 col = base * (amb * uAO + uSunColor * ndl * sh)
+    vec3 col = base * (amb * uAO * vColor.a + uSunColor * ndl * sh * (0.55 + 0.45 * vColor.a))
              + uSunColor * spec
              + env * fres * uMetal * (0.35 + 0.65*sh)
              + base * uEmissive;

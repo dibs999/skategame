@@ -157,10 +157,69 @@ struct Ctx {
     World& w;
     Ctx(const TexSet& t, World& ww) : tex(t), w(ww) {}
     std::vector<MeshBuilder> builders;
+    struct Pending { MeshBuilder b; Material mat; bool shadow; };
+    std::vector<Pending> pending;
     MeshBuilder& mb() { builders.emplace_back(); return builders.back(); }
     void add(const MeshBuilder& m, const Material& mat, bool shadow = true) {
-        g_meshes.push_back(const_cast<MeshBuilder&>(m).build());
-        w.items.push_back({&g_meshes.back(), Mat4(), mat, shadow});
+        pending.push_back({m, mat, shadow});
+    }
+    // Bake hemisphere occlusion vs the solid boxes into vertex alpha, then upload.
+    void finish() {
+        for (auto& p : pending) {
+            bakeAO(p.b);
+            g_meshes.push_back(p.b.build());
+            w.items.push_back({&g_meshes.back(), Mat4(), p.mat, p.shadow});
+        }
+    }
+    static bool rayBox(const Vec3& o, const Vec3& d, const SolidBox& b, float maxT) {
+        float t0 = 0.f, t1 = maxT;
+        for (int ax = 0; ax < 3; ax++) {
+            float oo = ax == 0 ? o.x : ax == 1 ? o.y : o.z;
+            float dd = ax == 0 ? d.x : ax == 1 ? d.y : d.z;
+            float mn = ax == 0 ? b.mn.x : ax == 1 ? b.mn.y : b.mn.z;
+            float mx = ax == 0 ? b.mx.x : ax == 1 ? b.mx.y : b.mx.z;
+            if (std::abs(dd) < 1e-8f) { if (oo < mn || oo > mx) return false; continue; }
+            float ta = (mn - oo) / dd, tb = (mx - oo) / dd;
+            if (ta > tb) std::swap(ta, tb);
+            t0 = std::max(t0, ta); t1 = std::min(t1, tb);
+            if (t0 > t1) return false;
+        }
+        return t1 > 0.f;
+    }
+    void bakeAO(MeshBuilder& mb) {
+        const int K = 8;
+        const float R = 2.2f;
+        for (auto& vtx : mb.v) {
+            Vec3 n(vtx.nx, vtx.ny, vtx.nz);
+            if (n.len2() < 1e-6f) continue;
+            Vec3 nn = n.normalized();
+            Vec3 o(vtx.px + nn.x * 0.03f, vtx.py + nn.y * 0.03f, vtx.pz + nn.z * 0.03f);
+            // tangent frame + golden-spiral hemisphere samples
+            Vec3 t = (std::abs(nn.y) < 0.9f ? nn.cross(Vec3(0, 1, 0)) : nn.cross(Vec3(1, 0, 0))).normalized();
+            Vec3 bb = nn.cross(t);
+            int occ = 0;
+            for (int i = 0; i < K; i++) {
+                float u = (i + 0.5f) / K, v = std::fmod(i * 0.6180339f, 1.f);
+                float cz = 1.f - u * 0.85f;            // bias toward normal
+                float sz = std::sqrt(std::max(0.f, 1 - cz * cz));
+                float a = v * 6.2831853f;
+                Vec3 d = t * (sz * std::cos(a)) + bb * (sz * std::sin(a)) + nn * cz;
+                bool hit = false;
+                for (auto& sb : w.solids) {
+                    Vec3 c = (sb.mn + sb.mx) * 0.5f;
+                    float rr = (sb.mx - sb.mn).len() * 0.5f + R;
+                    if ((c - o).len2() > rr * rr) continue;
+                    // ignore the solid the sample starts inside (the prop's own collision box)
+                    if (o.x > sb.mn.x - 0.02f && o.x < sb.mx.x + 0.02f &&
+                        o.y > sb.mn.y - 0.02f && o.y < sb.mx.y + 0.02f &&
+                        o.z > sb.mn.z - 0.02f && o.z < sb.mx.z + 0.02f) continue;
+                    if (rayBox(o, d, sb, R)) { hit = true; break; }
+                }
+                if (hit) occ++;
+            }
+            float ao = 1.f - (occ / (float)K) * 0.72f;
+            vtx.a *= ao;
+        }
     }
     void ledgeEdges(float x0, float z0, float x1, float z1, float y) {
         w.edges.push_back({{x0, y, z0}, {x1, y, z0}, false});
@@ -554,4 +613,5 @@ void World::build(const TexSet& tex) {
         bw.box({-73.4f, 0.5f, 8}, {0.4f, 0.5f, 56});
         cx.add(bw, {tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f});
     }
+    cx.finish();
 }
