@@ -120,6 +120,34 @@ static GLuint genConcrete(int w, float basev, bool joints, bool wax) {
             }
         }
     }
+    // oil/rust stains: irregular dark blotches that pool near joints
+    for (int st = 0; st < 7; st++) {
+        float cx = randf(seed), cy = randf(seed), r = 0.03f + randf(seed) * 0.08f;
+        float tone = 0.55f + randf(seed) * 0.2f;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                float u = x / (float)w - cx, v = y / (float)h - cy;
+                float d = std::sqrt(u * u + v * v) / r + (fbm2(u * 22 + 5, v * 22, 22, 3) - 0.5f) * 0.8f;
+                if (d < 1.f) {
+                    unsigned char* p = &img[(y * w + x) * 4];
+                    float k = (1.f - d) * 0.35f * tone;
+                    for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 88.f, k);
+                }
+            }
+    }
+    // hairline cracks: thin wandering dark polylines
+    for (int crk = 0; crk < 5; crk++) {
+        float x = randf(seed) * w, y = randf(seed) * h;
+        float ang = randf(seed) * 6.28f;
+        int segs = 20 + (int)(randf(seed) * 40);
+        for (int sgm = 0; sgm < segs; sgm++) {
+            ang += (fbm2(x * 0.05f, y * 0.05f, 8, 2) - 0.5f) * 1.4f;
+            x += std::cos(ang) * 2.2f; y += std::sin(ang) * 2.2f;
+            int px = ((int)x % w + w) % w, py = ((int)y % h + h) % h;
+            unsigned char* p = &img[(py * w + px) * 4];
+            for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 55.f, 0.4f);
+        }
+    }
     // scuffs and tire marks
     strokes(img, w, h, 60, 60, 60, 62, 90, seed, 30, false);
     strokes(img, w, h, 60, 60, 60, 62, 90, seed, 30, true);
