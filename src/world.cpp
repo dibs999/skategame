@@ -619,8 +619,11 @@ void World::build(const TexSet& tex) {
         cn.setColor({1, 1, 1});
         auto cone = [&](float x, float z) {
             cn.box({x, 0.02f, z}, {0.14f, 0.02f, 0.14f});                    // base
-            cn.cylinder({x, 0.03f, z}, {x, 0.30f, z}, 0.10f, 8);            // body lower
-            cn.cylinder({x, 0.10f, z}, {x, 0.34f, z}, 0.055f, 8);           // taper
+            // stacked segments of decreasing radius approximate the cone taper
+            cn.cylinder({x, 0.03f, z}, {x, 0.12f, z}, 0.105f, 10);
+            cn.cylinder({x, 0.12f, z}, {x, 0.20f, z}, 0.075f, 10);
+            cn.cylinder({x, 0.20f, z}, {x, 0.27f, z}, 0.048f, 10);
+            cn.cylinder({x, 0.27f, z}, {x, 0.33f, z}, 0.026f, 10);
         };
         cone(-8, -2); cone(-4.5f, 3); cone(2, -6); cone(9, 8);
         cone(20, -3); cone(-18, -7); cone(33, 6); cone(-30, 14);
