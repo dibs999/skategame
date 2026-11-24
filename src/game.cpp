@@ -465,7 +465,9 @@ void Game::update(const Input& in, float dt) {
     s.crouchVis = dampf(s.crouchVis, s.crouch, 12, dt);
 
     Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
-    float steer = (in.left ? 1.f : 0.f) - (in.right ? 1.f : 0.f);
+    float steerRaw = (in.left ? 1.f : 0.f) - (in.right ? 1.f : 0.f);
+    steerSmth += (steerRaw - steerSmth) * std::min(1.f, 9.f * dt);   // analog-feel ramp instead of binary snap
+    float steer = steerSmth;
 
     switch (s.state) {
     case S_GROUND: {

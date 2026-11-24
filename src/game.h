@@ -117,7 +117,8 @@ struct Game {
     float markerYaw = 0;
     // camera fx
     float shake = 0, flash = 0;
-    float now = 0;              // game clock for input chord windows
+    float now = 0;
+    float steerSmth = 0;              // game clock for input chord windows
     float fovBoost = 0;
     // skater/board meshes (built once)
     Mesh mCapsule, mSphere, mBox, mDeck, mDeckTop, mTruck, mWheel, mMarker, mFlag;
