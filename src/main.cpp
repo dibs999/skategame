@@ -323,7 +323,7 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         line.use();
         line.setMat4("uMVP", ortho);
-        glLineWidth(2.f);
+        glLineWidth(2.5f);
         hud.draw(lb, game, W, H);
         lb.flush();
         glDisable(GL_BLEND);
