@@ -172,13 +172,13 @@ int main(int argc, char** argv) {
             Vec3 rgt(-std::sin(game.s.yaw), 0, std::cos(game.s.yaw));
             float sp = game.s.speed;
             float dist = 2.6f + sp * 0.17f;
-            Vec3 desired = game.s.pos - f * dist + Vec3(0, 0.62f + sp * 0.012f, 0)
+            Vec3 desired = game.s.pos - f * dist + Vec3(0, 0.92f + sp * 0.016f, 0)
                          + rgt * (game.s.lean * 0.5f);
             // keep camera above ground
             float gy = game.world.supportHeight(desired.x, desired.z, desired.y + 2.f);
             if (desired.y < gy + 0.35f) desired.y = gy + 0.35f;
             camPos = dampv(camPos, desired, 7.5f, frameDt);
-            Vec3 look = game.s.pos + f * 1.0f + Vec3(0, 0.68f, 0);
+            Vec3 look = game.s.pos + f * 1.6f + Vec3(0, 0.55f, 0);
             camTarget = dampv(camTarget, look, 10.f, frameDt);
             camRoll = dampf(camRoll, game.s.lean * 0.05f, 6, frameDt);
         }

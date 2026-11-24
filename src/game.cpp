@@ -453,7 +453,9 @@ void Game::update(const Input& in, float dt) {
         static float prevCrouchKey = 0;
         bool released = prevCrouchKey > 0.5f && !in.crouch;
         prevCrouchKey = in.crouch ? 1 : 0;
-        if ((released && s.crouch > 0.15f) || in.jump) {
+        Vec3 nrm = world.supportNormal(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        bool onTransition = nrm.y < 0.82f;
+        if ((released && s.crouch > 0.15f && !onTransition) || in.jump) {
             if (in.jump && s.crouch > 0.35f) {
                 doOllie(std::min(1.f, s.crouch));   // boneless: crouched + Space
                 s.vel.y += 1.3f;
