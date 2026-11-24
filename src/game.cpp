@@ -1040,6 +1040,16 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         Vec3 hp = hd == 0 ? handL : handR;
         out.push_back({&mSphere, Mat4::mul(Mat4::translation(hp), Mat4::scale({0.052f, 0.06f, 0.045f})), skin});
     }
+    if (hasSkaterMesh) {
+        // joint filler spheres mask the rigid seams of the segmented mesh
+        auto joint = [&](const Vec3& p, float r, const Material& mat) {
+            out.push_back({&mSphere, Mat4::mul(Mat4::translation(p), Mat4::scale({r, r, r})), mat});
+        };
+        joint(kneeL, 0.075f, denim); joint(kneeR, 0.075f, denim);
+        joint(elbL, 0.055f, skin); joint(elbR, 0.055f, skin);
+        joint(shoL, 0.075f, shirt); joint(shoR, 0.075f, shirt);
+        joint(hipL, 0.095f, denim); joint(hipR, 0.095f, denim);
+    }
 
     // bail: draw loose board separately
     if (s.state == S_BAIL) drawBoard(out, bm, true);
