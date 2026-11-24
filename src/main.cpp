@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
         }
         const Uint8* k = SDL_GetKeyboardState(nullptr);
         in.push = k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP];
-        in.brake = k[SDL_SCANCODE_S] || (k[SDL_SCANCODE_DOWN] && game.s.state == S_GROUND);
+        in.brake = k[SDL_SCANCODE_S] || (k[SDL_SCANCODE_DOWN] && game.s.state != S_AIR);
         in.left = k[SDL_SCANCODE_A] || (k[SDL_SCANCODE_LEFT] && game.s.state == S_GROUND);
         in.right = k[SDL_SCANCODE_D] || (k[SDL_SCANCODE_RIGHT] && game.s.state == S_GROUND);
         in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_RCTRL] || k[SDL_SCANCODE_C];
@@ -136,6 +136,8 @@ int main(int argc, char** argv) {
         in.grab[1] = k[SDL_SCANCODE_E];
         in.grab[2] = k[SDL_SCANCODE_F];
         in.grab[3] = k[SDL_SCANCODE_G];
+        in.manual = k[SDL_SCANCODE_R];
+        in.noseManual = k[SDL_SCANCODE_V];
         in.setMarker = k[SDL_SCANCODE_M] && !prevSet;
         in.goMarker = k[SDL_SCANCODE_T] && !prevGo;
         bool jumpNow = in.jump;

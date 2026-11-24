@@ -67,8 +67,8 @@ struct HUD {
             float aw = font.textWidth(buf, 2.4f * u);
             text(buf, W - 20 * u - aw, H - 80 * u, 2.4f * u, white);
         }
-        // balance meter while grinding
-        if (s.state == S_GRIND) {
+        // balance meter while grinding / manualing
+        if (s.state == S_GRIND || s.state == S_MANUAL) {
             float mw = 140 * u, mx = W / 2 - mw / 2, my = H - 70 * u;
             lb.line({mx, my, z}, {mx + mw, my, z}, dim, 0.9f);
             lb.line({mx, my + 10 * u, z}, {mx + mw, my + 10 * u, z}, dim, 0.9f);
@@ -90,7 +90,7 @@ struct HUD {
             text(s.bailText, W / 2 - bw2 / 2, H * 0.30f + 52 * u, 3.2f * u, white);
         }
         // controls hint first seconds (always small bottom-center)
-        const char* hint = "W PUSH  A/D CARVE  CTRL OLLIE  ARROWS TRICKS  Q/E/F/G GRAB  SPACE POP  M MARKER  T TELEPORT";
+        const char* hint = "W PUSH  A/D CARVE  CTRL OLLIE  ARROWS TRICKS  Q/E/F/G GRAB  R/V MANUAL  M MARKER  T TELEPORT";
         text(hint, W / 2 - font.textWidth(hint, 1.6f * u) / 2, H - 22 * u, 1.6f * u, dim, 0.75f);
     }
 };

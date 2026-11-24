@@ -111,13 +111,12 @@ Mat4 Game::boardMatrix() const {
     if (s.state == S_BAIL) {
         Vec3 p = s.looseBoard.pos;
         Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
-        Vec3 r = f.cross({0,1,0});
-        Mat4 basis = Mat4::fromBasis(-r, {0,1,0}, f, p);
+        Mat4 basis = Mat4::fromBasis(f, {0,1,0}, f.cross({0,1,0}), p);
         return Mat4::mul(basis, Mat4::rotateAxis({0,0,1}, s.looseBoard.spin));
     }
     Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
     Vec3 n{0, 1, 0};
-    if (s.state == S_GROUND) n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+    if (s.state == S_GROUND || s.state == S_MANUAL) n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
     if (s.state == S_GRIND && s.grindEdge >= 0 && !s.grindBoardslide) {
         // pitch board to the edge slope for 50-50
         auto& e = world.edges[s.grindEdge];
@@ -127,7 +126,7 @@ Mat4 Game::boardMatrix() const {
         Vec3 rightG = d.cross(upG).normalized();
         Vec3 up2 = rightG.cross(d);
         float boardY = s.pos.y + 0.075f;
-        Mat4 basis = Mat4::fromBasis(rightG, up2, d, {s.pos.x, boardY, s.pos.z});
+        Mat4 basis = Mat4::fromBasis(d, up2, d.cross(up2), {s.pos.x, boardY, s.pos.z});
         Mat4 m = basis;
         m = Mat4::mul(m, Mat4::rotateY(s.boardSpin));
         m = Mat4::mul(m, Mat4::rotateX(s.boardRoll));
@@ -137,13 +136,15 @@ Mat4 Game::boardMatrix() const {
     Vec3 right = fwd.cross(n).normalized();
     Vec3 up = right.cross(fwd);
     float boardY = s.pos.y + 0.075f; // wheels+trucks+deck height above surface
-    Mat4 basis = Mat4::fromBasis(right, up, fwd, {s.pos.x, boardY, s.pos.z});
+    // deck length runs along local X -> nose points along fwd
+    Mat4 basis = Mat4::fromBasis(fwd, up, fwd.cross(up), {s.pos.x, boardY, s.pos.z});
     // flip anims in board space
     Mat4 m = basis;
     m = Mat4::mul(m, Mat4::rotateY(s.boardSpin));
     m = Mat4::mul(m, Mat4::rotateX(s.boardRoll));
-    // pop tilt
-    if (s.popTimer > 0) m = Mat4::mul(m, Mat4::rotateZ(0)); // reserved
+    // manual: pitch the deck on its axle (local Z) around the lifted end
+    if (s.state == S_MANUAL)
+        m = Mat4::mul(m, Mat4::rotateZ(s.manualDir * (0.30f + 0.35f * s.balance * s.manualDir)));
     return m;
 }
 
@@ -253,7 +254,16 @@ void Game::bail(const char* text) {
     fx.dust(s.pos, 14, 2.5f, s.vel * 0.3f);
 }
 
-void Game::land() {
+void Game::endManual() {
+    s.state = S_GROUND;
+    s.manualDir = 0;
+    s.balance = 0;
+    fx.dust(s.pos, 3, 0.5f);
+    // exiting the manual is the landing — bank the line
+    if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
+}
+
+void Game::land(bool bankLine) {
     float impact = -s.vel.y;
     bool bad = (s.flip != F_NONE && s.flipPhase < 0.8f);
     bool upsideDown = std::fmod(std::abs(s.boardRoll), 6.28f) > 2.2f &&
@@ -281,7 +291,7 @@ void Game::land() {
     else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); g_audio.fire(AudioFx::LAND); }
     if (s.airTime > 0.5f && s.trickName.empty()) score(50, "OLLIE");
     // bank the line
-    if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
+    if (bankLine && s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
 }
 
 void Game::setMarkerHere() {
@@ -314,7 +324,7 @@ void Game::update(const Input& in, float dt) {
 
     s.speed = std::hypot(s.vel.x, s.vel.z);
     s.wheelSpin += s.speed * dt / 0.027f;
-    g_audio.roll = s.state == S_GROUND ? std::min(s.speed / 16.f, 0.7f) : 0.f;
+    g_audio.roll = (s.state == S_GROUND || s.state == S_MANUAL) ? std::min(s.speed / 16.f, 0.7f) : 0.f;
     g_audio.wind = clampf((s.speed - 8.f) / 30.f, 0.f, 0.5f);
     g_audio.grind = s.state == S_GRIND ? 0.5f : 0.f;
     s.pushAnim = std::max(0.f, s.pushAnim - dt);
@@ -339,6 +349,15 @@ void Game::update(const Input& in, float dt) {
         if ((released && s.crouch > 0.15f) || in.jump) {
             doOllie(in.jump ? 0.55f : s.crouch);
             s.crouch = 0;
+            break;
+        }
+        // manual entry while rolling
+        if ((in.manual || in.noseManual) && s.speed > 1.f) {
+            s.manualDir = in.noseManual ? -1 : 1;
+            s.state = S_MANUAL;
+            s.balance = 0;
+            s.trickName = s.manualDir > 0 ? "MANUAL" : "NOSE MANUAL";
+            s.trickT = 1.2f;
             break;
         }
         // pushing
@@ -456,8 +475,72 @@ void Game::update(const Input& in, float dt) {
                               std::abs(s.vel.x * d.x + s.vel.z * d.z) > 1.0f;
                 if (locked) { tryGrind(); break; }
             }
-            if (s.pos.y <= ground + 0.02f) land();
+            if (s.pos.y <= ground + 0.02f) {
+                // landing into a held manual keeps the line alive
+                if (in.manual || in.noseManual) {
+                    land(false);
+                    if (s.state == S_GROUND) {
+                        s.manualDir = in.noseManual ? -1 : 1;
+                        s.state = S_MANUAL;
+                        s.balance = 0;
+                        s.trickName = s.manualDir > 0 ? "MANUAL" : "NOSE MANUAL";
+                        s.trickT = 1.2f;
+                    }
+                } else {
+                    land();
+                }
+            }
         }
+        break;
+    }
+    case S_MANUAL: {
+        // released the key or ran out of speed: wheels drop, line banks
+        if (!(in.manual || in.noseManual) || s.speed < 0.3f) { endManual(); break; }
+        int dir = s.manualDir;
+        // balance creeps toward the lifted axle + noise; W lifts, S drops
+        s.balance += dir * 0.22f * dt + (randf(s.flailSeed) - 0.5f) * 1.0f * dt;
+        if (in.push)  s.balance += 1.9f * dt;
+        if (in.brake) s.balance -= 1.9f * dt;
+        if (s.balance * dir > 1.f) { bail(dir > 0 ? "LOOPED OUT" : "OVER THE NOSE"); break; }
+        if (s.balance * dir < -0.35f) { endManual(); break; } // wheels touched back down
+        // hop out onto the line
+        if (in.jump) { doOllie(0.4f); break; }
+        // steering + rolling (no pushing while up on the trucks)
+        float yawRate = steer * (0.9f + s.speed * 0.05f);
+        s.yaw += yawRate * dt;
+        s.lean = dampf(s.lean, steer * 0.3f + s.balance * -0.15f * dir, 6, dt);
+        Vec3 n = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        Vec3 a = Vec3(0, -GRAV, 0) - n * Vec3(0, -GRAV, 0).dot(n);
+        s.vel += a * dt;
+        float fr = 0.30f;
+        s.vel.x -= s.vel.x * fr * dt;
+        s.vel.z -= s.vel.z * fr * dt;
+        s.vel.y = 0;
+        // move (same wall/ground logic as rolling)
+        Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
+        Vec3 sn = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+        float slope = -(s.vel.x * sn.x + s.vel.z * sn.z) / std::max(sn.y, 0.3f);
+        bool wall = world.collideWalls(np, s.vel);
+        s.pos.x = np.x; s.pos.z = np.z;
+        float ground = world.supportHeight(s.pos.x, s.pos.z, s.pos.y + 0.3f);
+        if (slope > 0.7f) { endManual(); break; } // transitions drop the manual
+        if (wall && s.speed > 7.f) { bail("SKATED INTO A WALL"); break; }
+        if (ground < s.pos.y - 0.3f) {
+            Vec3 on = world.supportNormal(s.pos.x - s.vel.x * dt, s.pos.z - s.vel.z * dt, s.pos.y);
+            s.vel.y = clampf(-(s.vel.x * on.x + s.vel.z * on.z) / std::max(on.y, 0.3f), -10.f, 10.f);
+            s.state = S_AIR;
+            s.airTime = 0; s.fallStart = s.pos.y;
+            s.trickWindow = 0.25f;
+            s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
+            s.grab = G_NONE;
+            break;
+        }
+        s.pos.y = ground;
+        // ticking score keeps the combo window open
+        s.lineScore += (int)(60.f * dt * s.mult);
+        s.comboT = 3.f;
+        s.trickName = dir > 0 ? "MANUAL" : "NOSE MANUAL";
+        s.trickT = 0.5f;
         break;
     }
     case S_GRIND: {
@@ -565,6 +648,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     Vec3 bodyUp(0, 1, 0);
     Vec3 leanF = f * (cr * 0.10f + (air ? 0.02f : 0.f)) + rgt * (s.lean * 0.12f);
     if (s.state == S_GRIND) leanF = leanF + rgt * (s.balance * 0.1f);
+    if (s.state == S_MANUAL) leanF = leanF - f * (0.14f * s.manualDir) + rgt * (s.balance * 0.06f);
     if (bail_) leanF = f * 0.6f + rgt * 0.3f;
     Vec3 neck = hipPos + bodyUp * 0.46f + leanF;
     Vec3 head = neck + bodyUp * 0.17f;
@@ -641,7 +725,8 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         handL = shoL + Vec3(-0.25f, -0.28f, 0.15f) + f * 0.1f;
     } else {
         float swing = s.pushAnim > 0 ? std::sin((1 - s.pushAnim / 0.75f) * 6.28f) * 0.3f : 0;
-        float outAmt = 0.22f + std::abs(s.lean) * 0.35f + (s.state == S_GRIND ? 0.15f : 0);
+        float outAmt = 0.22f + std::abs(s.lean) * 0.35f +
+                       (s.state == S_GRIND ? 0.15f : 0) + (s.state == S_MANUAL ? 0.22f : 0);
         handL = shoL + (rgt * -outAmt) + Vec3(0, -0.30f + cr * -0.05f, 0) + f * (0.08f + swing);
         handR = shoR + (rgt * outAmt) + Vec3(0, -0.30f + cr * -0.05f, 0) + f * (0.05f - swing);
         if (s.state == S_GRIND) {
