@@ -425,8 +425,10 @@ void Game::update(const Input& in, float dt) {
             break;
         }
         // carving: heading turns, velocity follows the deck (rides fakie after
-        // a landed 180 until you carve back around)
-        float yawRate = steer * (1.6f + s.speed * 0.12f);
+        // a landed 180 until you carve back around). Braking into a hard carve
+        // breaks traction: a powerslide — board swings out, speed bleeds fast.
+        bool sliding = in.brake && std::abs(steer) > 0.5f && s.speed > 3.f;
+        float yawRate = steer * (1.6f + s.speed * 0.12f) * (sliding ? 1.9f : 1.f);
         s.yaw += yawRate * dt;
         bool fakie = false;
         if (s.speed > 0.4f) {
@@ -434,7 +436,8 @@ void Game::update(const Input& in, float dt) {
             float dv = std::remainder(s.yaw - vh, 6.2832f);
             fakie = std::abs(dv) > 1.5708f;
             if (!fakie) {
-                float a = vh + clampf(dv, -3.5f * dt, 3.5f * dt);
+                float follow = sliding ? 1.1f : 3.5f;
+                float a = vh + clampf(dv, -follow * dt, follow * dt);
                 s.vel.x = std::cos(a) * s.speed;
                 s.vel.z = std::sin(a) * s.speed;
             }
@@ -456,6 +459,12 @@ void Game::update(const Input& in, float dt) {
         }
         float fr = 0.4f + scrub;
         if (in.brake) fr += 3.0f;
+        if (sliding) {
+            fr += 1.4f;
+            if (randf(s.flailSeed) < 0.6f) fx.dust(s.pos - f * 0.35f, 2, 0.7f);
+            s.trickName = "POWERSLIDE"; s.trickT = 0.4f;
+            s.lineScore += (int)(45 * dt * s.mult);
+        }
         s.vel.x -= s.vel.x * fr * dt;
         s.vel.z -= s.vel.z * fr * dt;
         if (s.speed > PUSH_CAP * 1.02f && s.pushAnim > 0) {
