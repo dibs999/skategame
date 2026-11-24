@@ -4,6 +4,8 @@
 #include "geom.h"
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 
 static const float GRAV = 12.5f;
 static const float PUSH_ACCEL = 4.2f, PUSH_CAP = 9.0f;
@@ -67,8 +69,16 @@ static Mat4 capsuleXform(const Vec3& a, const Vec3& b, float r) {
     return Mat4::mul(basis, Mat4::scale({r * 2.f, len * 0.55f, r * 2.f}));
 }
 
+static const char* bestPath() {
+    static char path[512];
+    if (!path[0]) { const char* h = getenv("HOME"); snprintf(path, sizeof path, "%s/.portcarverton_best", h ? h : "."); }
+    return path;
+}
+static void saveBest(int v) { FILE* f = fopen(bestPath(), "w"); if (f) { fprintf(f, "%d", v); fclose(f); } }
+
 void Game::init(const TexSet& t) {
     tex = t;
+    if (FILE* f = fopen(bestPath(), "r")) { if (fscanf(f, "%d", &s.bestScore) != 1) s.bestScore = 0; fclose(f); }
     world.build(t);
     // skater/board meshes
     { MeshBuilder m; m.setColor({1,1,1}); m.capsule({0,-0.5f,0},{0,0.5f,0},0.5f,10); mCapsule = m.build(); }
@@ -160,6 +170,8 @@ void Game::score(int pts, const char* name) {
     s.comboT = 3.0f;
     s.trickName = name;
     s.trickT = 2.2f;
+    int tot = s.totalScore + s.lineScore;
+    if (tot > s.bestScore) { s.bestScore = tot; saveBest(tot); }
     // chain the name into the running line readout, keeping the last 4 entries
     if (!s.lineTricks.empty()) s.lineTricks += " + ";
     s.lineTricks += name;

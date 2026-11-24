@@ -109,6 +109,10 @@ struct HUD {
             snprintf(buf, sizeof buf, "MEAT %d", s.meatPts);
             text(buf, W - 18 * u - font.textWidth(buf, 2.2f * u), 44 * u, 2.2f * u, dim);
         }
+        if (s.bestScore > 0) {
+            snprintf(buf, sizeof buf, "BEST %d", s.bestScore);
+            text(buf, W - 18 * u - font.textWidth(buf, 2.0f * u), 62 * u, 2.0f * u, dim);
+        }
         // controls hint first seconds (always small bottom-center)
         const char* hint = "W PUSH  A/D CARVE+SPIN  CTRL OLLIE  ARROWS TRICKS 2 ARROWS=COMBO  Q/E/F/G GRAB  R/V MANUAL  M/T MARKER 1-5 SPOTS  O SCORE ATTACK";
         text(hint, W / 2 - font.textWidth(hint, 1.6f * u) / 2, H - 22 * u, 1.6f * u, dim, 0.75f);

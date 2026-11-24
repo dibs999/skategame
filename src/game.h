@@ -83,7 +83,7 @@ struct Skater {
     Board looseBoard;
     unsigned flailSeed = 1;
     // score
-    int lineScore = 0, totalScore = 0, mult = 1;
+    int lineScore = 0, totalScore = 0, mult = 1, bestScore = 0;
     float comboT = 0;
     std::string trickName;
     std::string lineTricks;   // "+ "-joined chain of tricks in the current line
