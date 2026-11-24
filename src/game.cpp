@@ -188,9 +188,13 @@ void Game::startFlip(Flip f) {
     case F_HEEL: n = "HEELFLIP"; break;
     case F_SHOVE: n = "POP SHOVE-IT"; break;
     case F_TREFLIP: n = "360 FLIP"; break;
+    case F_VARIALKICK: n = "VARIAL KICKFLIP"; break;
+    case F_HARD: n = "HARDFLIP"; break;
+    case F_VARIALHEEL: n = "VARIAL HEELFLIP"; break;
+    case F_INWARD: n = "INWARD HEELFLIP"; break;
     default: break;
     }
-    int pts = f == F_TREFLIP ? 500 : (f == F_SHOVE ? 250 : 300);
+    int pts = f == F_TREFLIP ? 500 : (f == F_SHOVE ? 250 : (f > F_TREFLIP ? 420 : 300));
     score(pts, n);
 }
 
@@ -504,7 +508,12 @@ void Game::update(const Input& in, float dt) {
         s.vel.y -= GRAV * dt;
         // trick input
         if (s.flip == F_NONE) {
-            if (in.trick[0]) startFlip(F_KICK);
+            // diagonal combos first (Flick-It style): left+down etc.
+            if (in.trick[0] && in.trick[2]) startFlip(F_VARIALKICK);
+            else if (in.trick[1] && in.trick[2]) startFlip(F_VARIALHEEL);
+            else if (in.trick[0] && in.trick[3]) startFlip(F_HARD);
+            else if (in.trick[1] && in.trick[3]) startFlip(F_INWARD);
+            else if (in.trick[0]) startFlip(F_KICK);
             else if (in.trick[1]) startFlip(F_HEEL);
             else if (in.trick[2]) startFlip(F_SHOVE);
             else if (in.trick[3]) startFlip(F_TREFLIP);
@@ -518,6 +527,10 @@ void Game::update(const Input& in, float dt) {
             case F_HEEL:    s.boardRoll = ph * 6.283f; break;
             case F_SHOVE:   s.boardSpin = ph * 3.1416f; break;
             case F_TREFLIP: s.boardRoll = -ph * 6.283f; s.boardSpin = ph * 6.283f; break;
+            case F_VARIALKICK: s.boardRoll = -ph * 6.283f; s.boardSpin = ph * 3.1416f; break;
+            case F_HARD:       s.boardRoll = -ph * 6.283f; s.boardSpin = -ph * 3.1416f; break;
+            case F_VARIALHEEL: s.boardRoll = ph * 6.283f; s.boardSpin = -ph * 3.1416f; break;
+            case F_INWARD:     s.boardRoll = ph * 6.283f; s.boardSpin = ph * 3.1416f; break;
             default: break;
             }
         }

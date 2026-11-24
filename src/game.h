@@ -38,7 +38,7 @@ struct Particles {
 };
 
 enum SState { S_GROUND, S_AIR, S_GRIND, S_MANUAL, S_BAIL };
-enum Flip { F_NONE, F_KICK, F_HEEL, F_SHOVE, F_TREFLIP };
+enum Flip { F_NONE, F_KICK, F_HEEL, F_SHOVE, F_TREFLIP, F_VARIALKICK, F_HARD, F_VARIALHEEL, F_INWARD };
 enum Grab { G_NONE, G_INDY, G_MELON, G_NOSE, G_TAIL };
 
 struct Board {

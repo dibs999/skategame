@@ -94,7 +94,7 @@ struct HUD {
             text(s.bailText, W / 2 - bw2 / 2, H * 0.30f + 52 * u, 3.2f * u, white);
         }
         // controls hint first seconds (always small bottom-center)
-        const char* hint = "W PUSH  A/D CARVE+SPIN  CTRL OLLIE  ARROWS TRICKS  Q/E/F/G GRAB  R/V MANUAL  M MARKER T RETURN 1-5 SPOTS";
+        const char* hint = "W PUSH  A/D CARVE+SPIN  CTRL OLLIE  ARROWS TRICKS 2 ARROWS=COMBO  Q/E/F/G GRAB  R/V MANUAL  M/T MARKER 1-5 SPOTS";
         text(hint, W / 2 - font.textWidth(hint, 1.6f * u) / 2, H - 22 * u, 1.6f * u, dim, 0.75f);
     }
 };
