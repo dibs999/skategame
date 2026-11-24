@@ -18,6 +18,7 @@ struct Input {
     bool grab[4] = {false, false, false, false};  // Q,E,F,G in air
     bool manual = false, noseManual = false;      // R / V hold
     bool setMarker = false, goMarker = false;
+    int spot = -1;          // 1-5 teleport to named spots
 };
 
 struct Particle {
@@ -116,6 +117,7 @@ struct Game {
     void score(int pts, const char* name);
     void setMarkerHere();
     void teleportMarker();
+    void teleportSpot(int i);
 
     void drawSkater(std::vector<DrawItem>& out) const;
     void drawBoard(std::vector<DrawItem>& out, const Mat4& bm, bool loose) const;

@@ -333,6 +333,27 @@ void Game::teleportMarker() {
     flash = 0.25f;
 }
 
+void Game::teleportSpot(int i) {
+    static const struct { float x, z, yaw; const char* name; } SPOTS[] = {
+        {-10.f,    4.f, -0.4f,   "PLAZA"},
+        {-34.f,  -37.f,  1.5708f, "THE BOWL"},
+        { 53.f,   40.f,  0.f,     "MEGA RAMP"},
+        { 40.5f, -34.f,  0.f,     "MINI RAMP"},
+        { 20.f,   -9.f,  1.5708f, "STAIR SET"},
+    };
+    if (i < 0 || i >= 5) return;
+    auto& sp = SPOTS[i];
+    s.pos = {sp.x, 0, sp.z};
+    s.pos.y = world.supportHeight(sp.x, sp.z, 1e9f) + 0.05f;
+    s.yaw = sp.yaw;
+    s.vel = {0, 0, 0};
+    s.state = S_GROUND;
+    s.lineScore = 0; s.mult = 1;
+    s.trickName = std::string("SPOT: ") + sp.name;
+    s.trickT = 1.6f;
+    flash = 0.25f;
+}
+
 void Game::update(const Input& in, float dt) {
     Skater& s = this->s;
     if (getenv("SKATE_DEBUGPOS")) {           // dev aid: dump state ~2x/sec
@@ -344,6 +365,7 @@ void Game::update(const Input& in, float dt) {
     }
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
+    if (in.spot >= 0) teleportSpot(in.spot);
 
     s.speed = std::hypot(s.vel.x, s.vel.z);
     s.wheelSpin += s.speed * dt / 0.027f;
