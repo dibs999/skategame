@@ -1,6 +1,7 @@
 // Game state: skater physics, trick/grind systems, bail, scoring, session marker,
 // particles, and the animated skater + board model.
 #pragma once
+#include <map>
 #include "math3d.h"
 #include "world.h"
 #include "glcore.h"
@@ -120,6 +121,8 @@ struct Game {
     float fovBoost = 0;
     // skater/board meshes (built once)
     Mesh mCapsule, mSphere, mBox, mDeck, mDeckTop, mTruck, mWheel, mMarker, mFlag;
+    std::map<std::string, Mesh> skaterParts;
+    bool hasSkaterMesh = false;
 
     void init(const TexSet& t);
     void update(const Input& in, float dt);

@@ -1,5 +1,6 @@
 // Skater physics, tricks, grinds, bail, scoring, and the articulated model.
 #include "game.h"
+#include "meshload.h"
 #include "audio.h"
 #include "geom.h"
 #include <cmath>
@@ -69,6 +70,22 @@ static Mat4 capsuleXform(const Vec3& a, const Vec3& b, float r) {
     return Mat4::mul(basis, Mat4::scale({r * 2.f, len * 0.55f, r * 2.f}));
 }
 
+// Orient a Blender part mesh (origin at proximal joint, extends toward -Y)
+// along the bone a->b. ref hints the twist (skater forward/right). Y-scale
+// stretches the part to the actual bone length relative to its modeled length.
+static Mat4 partXform(const Vec3& a, const Vec3& b, const Vec3& ref, float modelLen) {
+    Vec3 dir = (b - a);
+    float len = std::max(dir.len(), 0.02f);
+    dir = dir / len;
+    Vec3 yc = dir * -1.f;                       // model -Y maps to bone dir
+    Vec3 xc = ref - yc * yc.dot(ref);
+    if (xc.len2() < 1e-6f) xc = std::abs(yc.y) < 0.9f ? yc.cross(Vec3(0,1,0)) : yc.cross(Vec3(1,0,0));
+    xc = xc.normalized();
+    Vec3 zc = xc.cross(yc).normalized();
+    Mat4 basis = Mat4::fromBasis(xc, yc, zc, a);
+    return Mat4::mul(basis, Mat4::scale({1.4f, len / modelLen * 1.14f, 1.4f}));
+}
+
 static const char* bestPath() {
     static char path[512];
     if (!path[0]) { const char* h = getenv("HOME"); snprintf(path, sizeof path, "%s/.portcarverton_best", h ? h : "."); }
@@ -84,6 +101,8 @@ void Game::init(const TexSet& t) {
     { MeshBuilder m; m.setColor({1,1,1}); m.capsule({0,-0.5f,0},{0,0.5f,0},0.5f,20); mCapsule = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.sphere({0,0,0},1.f,22,16); mSphere = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.box({0,0,0},{0.5f,0.5f,0.5f}); mBox = m.build(); }
+    for (const char* p : {"assets/skater.obj", "../assets/skater.obj", "../../assets/skater.obj"})
+        if (loadObjParts(p, skaterParts)) { hasSkaterMesh = true; break; }
     { MeshBuilder m; m.setColor({1,1,1}); m.deck(0.82f, 0.215f, 0.02f, 0.035f); mDeck = m.build(); }
     { MeshBuilder m; m.setColor({1,1,1}); m.deck(0.82f, 0.205f, 0.006f, 0.037f); mDeckTop = m.build(); }
     { // truck: baseplate + hanger + axle along z
@@ -926,10 +945,17 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     Material cap{0, 1.f, {0.12f, 0.14f, 0.18f}, 0.2f, 30.f, 0.9f, 0.f, 0.f};
 
     // thighs + shins + shoes
-    out.push_back({&mCapsule, capsuleXform(hipL, kneeL, 0.082f), denim});
-    out.push_back({&mCapsule, capsuleXform(kneeL, ankL, 0.062f), denim});
-    out.push_back({&mCapsule, capsuleXform(hipR, kneeR, 0.082f), denim});
-    out.push_back({&mCapsule, capsuleXform(kneeR, ankR, 0.062f), denim});
+    if (hasSkaterMesh) {
+        out.push_back({&skaterParts.at("thigh"), partXform(hipL, kneeL, f, 0.47f), denim});
+        out.push_back({&skaterParts.at("shin"),  partXform(kneeL, ankL, f, 0.47f), denim});
+        out.push_back({&skaterParts.at("thigh"), partXform(hipR, kneeR, f, 0.47f), denim});
+        out.push_back({&skaterParts.at("shin"),  partXform(kneeR, ankR, f, 0.47f), denim});
+    } else {
+        out.push_back({&mCapsule, capsuleXform(hipL, kneeL, 0.082f), denim});
+        out.push_back({&mCapsule, capsuleXform(kneeL, ankL, 0.062f), denim});
+        out.push_back({&mCapsule, capsuleXform(hipR, kneeR, 0.082f), denim});
+        out.push_back({&mCapsule, capsuleXform(kneeR, ankR, 0.062f), denim});
+    }
     for (int ft = 0; ft < 2; ft++) {
         Vec3 fp = ft == 0 ? footL : footR;
         float ry = s.yaw + (ft == 0 ? 0.15f : -0.15f);
@@ -940,19 +966,25 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         out.push_back({&mBox, Mat4::mul(sm, Mat4::scale({0.27f, 0.075f, 0.105f})), shoe});
     }
     // hips (denim) so the shirt reads as a shirt over pants
-    out.push_back({&mCapsule, capsuleXform(hipPos - Vec3(0, 0.10f, 0), hipPos + Vec3(0, 0.07f, 0), 0.115f), denim});
+    if (hasSkaterMesh) out.push_back({&skaterParts.at("pelvis"), partXform(hipPos + Vec3(0, 0.07f, 0), hipPos - Vec3(0, 0.10f, 0), f, 0.24f), denim});
+    else out.push_back({&mCapsule, capsuleXform(hipPos - Vec3(0, 0.10f, 0), hipPos + Vec3(0, 0.07f, 0), 0.115f), denim});
     // torso + head + cap
-    out.push_back({&mCapsule, capsuleXform(hipPos + Vec3(0, 0.05f, 0), neck, 0.125f), shirt});
-    out.push_back({&mSphere, Mat4::mul(Mat4::translation(head),
-                   Mat4::scale({0.115f, 0.125f, 0.115f})), skin});
+    if (hasSkaterMesh) {
+        out.push_back({&skaterParts.at("torso"), partXform(neck, hipPos + Vec3(0, 0.05f, 0), f, 0.42f), shirt});
+        out.push_back({&skaterParts.at("head"), partXform(head + Vec3(0, 0.11f, 0), head - Vec3(0, 0.10f, 0), f, 0.22f), skin});
+    } else {
+        out.push_back({&mCapsule, capsuleXform(hipPos + Vec3(0, 0.05f, 0), neck, 0.125f), shirt});
+        out.push_back({&mSphere, Mat4::mul(Mat4::translation(head),
+                       Mat4::scale({0.115f, 0.125f, 0.115f})), skin});
+    }
     Mat4 capm = Mat4::translation(head + Vec3(0, 0.10f, 0)) * Mat4::rotateY(s.yaw);
     out.push_back({&mSphere, Mat4::mul(capm, Mat4::scale({0.125f, 0.075f, 0.125f})), cap});
     out.push_back({&mBox, Mat4::mul(Mat4::translation(head + f * 0.12f + Vec3(0, 0.095f, 0)),
                    Mat4::rotateY(s.yaw) * Mat4::scale({0.16f, 0.02f, 0.12f})), cap});
 
     // arms
-    Vec3 shoL = neck - rgt * 0.20f + Vec3(0, -0.04f, 0);
-    Vec3 shoR = neck + rgt * 0.20f + Vec3(0, -0.04f, 0);
+    Vec3 shoL = neck - rgt * 0.15f + Vec3(0, -0.02f, 0);
+    Vec3 shoR = neck + rgt * 0.15f + Vec3(0, -0.02f, 0);
     Vec3 handL, handR;
     if (bail_) {
         unsigned sd = s.flailSeed + 5;
@@ -986,10 +1018,17 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     }
     Vec3 elbL = twoBoneIK(shoL, handL, 0.30f, 0.27f, Vec3(0, -1, 0) - f * 0.4f - rgt * 0.4f);
     Vec3 elbR = twoBoneIK(shoR, handR, 0.30f, 0.27f, Vec3(0, -1, 0) - f * 0.4f + rgt * 0.4f);
-    out.push_back({&mCapsule, capsuleXform(shoL, elbL, 0.055f), shirt});
-    out.push_back({&mCapsule, capsuleXform(elbL, handL, 0.045f), skin});
-    out.push_back({&mCapsule, capsuleXform(shoR, elbR, 0.055f), shirt});
-    out.push_back({&mCapsule, capsuleXform(elbR, handR, 0.045f), skin});
+    if (hasSkaterMesh) {
+        out.push_back({&skaterParts.at("upperarm"), partXform(shoL, elbL, f, 0.31f), shirt});
+        out.push_back({&skaterParts.at("forearm"),  partXform(elbL, handL, f, 0.29f), skin});
+        out.push_back({&skaterParts.at("upperarm"), partXform(shoR, elbR, f, 0.31f), shirt});
+        out.push_back({&skaterParts.at("forearm"),  partXform(elbR, handR, f, 0.29f), skin});
+    } else {
+        out.push_back({&mCapsule, capsuleXform(shoL, elbL, 0.055f), shirt});
+        out.push_back({&mCapsule, capsuleXform(elbL, handL, 0.045f), skin});
+        out.push_back({&mCapsule, capsuleXform(shoR, elbR, 0.055f), shirt});
+        out.push_back({&mCapsule, capsuleXform(elbR, handR, 0.045f), skin});
+    }
     for (int hd = 0; hd < 2; hd++) {
         Vec3 hp = hd == 0 ? handL : handR;
         out.push_back({&mSphere, Mat4::mul(Mat4::translation(hp), Mat4::scale({0.052f, 0.06f, 0.045f})), skin});
