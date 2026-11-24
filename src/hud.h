@@ -102,9 +102,15 @@ struct HUD {
             textBold(t, W / 2 - tw / 2, H * 0.30f, 6.4f * u, {1, 0.3f, 0.2f});
             float bw2 = font.textWidth(s.bailText, 3.2f * u);
             text(s.bailText, W / 2 - bw2 / 2, H * 0.30f + 52 * u, 3.2f * u, white);
+            snprintf(buf, sizeof buf, "+%d", s.meatGain);
+            text(buf, W / 2 - font.textWidth(buf, 2.8f * u) / 2, H * 0.30f + 82 * u, 2.8f * u, accent);
+        }
+        if (s.meatPts > 0 && s.state != S_BAIL) {
+            snprintf(buf, sizeof buf, "MEAT %d", s.meatPts);
+            text(buf, W - 18 * u - font.textWidth(buf, 2.2f * u), 44 * u, 2.2f * u, dim);
         }
         // controls hint first seconds (always small bottom-center)
-        const char* hint = "W PUSH  A/D CARVE+SPIN  CTRL OLLIE  ARROWS TRICKS 2 ARROWS=COMBO  Q/E/F/G GRAB  R/V MANUAL  M/T MARKER 1-5 SPOTS";
+        const char* hint = "W PUSH  A/D CARVE+SPIN  CTRL OLLIE  ARROWS TRICKS 2 ARROWS=COMBO  Q/E/F/G GRAB  R/V MANUAL  M/T MARKER 1-5 SPOTS  O SCORE ATTACK";
         text(hint, W / 2 - font.textWidth(hint, 1.6f * u) / 2, H - 22 * u, 1.6f * u, dim, 0.75f);
     }
 };

@@ -267,6 +267,10 @@ void Game::bail(const char* text) {
     s.lineScore = 0; s.lineTricks.clear();
     s.mult = 1;
     s.grindEdge = -1;
+    // Hall of Meat: harder, faster, higher slams are worth more
+    s.meatGain = (int)(40 + s.speed * 9 + std::max(0.f, s.fallStart - s.pos.y) * 14 +
+                       std::abs(s.vel.y) * 5);
+    s.meatPts += s.meatGain;
     shake = std::max(shake, 0.8f);
     flash = 0.5f;
     fx.dust(s.pos, 14, 2.5f, s.vel * 0.3f);

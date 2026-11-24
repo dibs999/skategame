@@ -90,6 +90,8 @@ struct Skater {
     float runTimer = -1.f;    // >0 while a Score Attack run is live
     int runBase = 0;          // totalScore at run start
     int lastRun = 0;          // most recent finished run's points
+    int meatPts = 0;          // Hall of Meat running total
+    int meatGain = 0;         // points earned by the last bail
     float trickT = 0;
     bool pendingLand = false;
     float speed = 0;
