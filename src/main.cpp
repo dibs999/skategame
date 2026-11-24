@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
     float camRoll = 0;
 
     Input in;
-    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevDusk = false, prevSpot[5] = {};
+    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevDusk = false, prevReset = false, prevSpot[5] = {};
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
     double perfFreq = (double)SDL_GetPerformanceFrequency();
@@ -143,6 +143,8 @@ int main(int argc, char** argv) {
         in.goMarker = k[SDL_SCANCODE_T] && !prevGo;
         in.runToggle = k[SDL_SCANCODE_O] && !prevRun;
         prevRun = k[SDL_SCANCODE_O];
+        in.resetScore = k[SDL_SCANCODE_BACKSPACE] && !prevReset;
+        prevReset = k[SDL_SCANCODE_BACKSPACE];
         if (k[SDL_SCANCODE_N] && !prevDusk) { dusk = !dusk; sunDir = Vec3(dusk ? 0.9f : 0.55f, dusk ? 0.20f : 0.62f, dusk ? 0.28f : 0.35f).normalized(); }
         prevDusk = k[SDL_SCANCODE_N];
         in.spot = -1;
@@ -161,7 +163,7 @@ int main(int argc, char** argv) {
             game.update(in, dt);
             rem -= dt;
         }
-        in.setMarker = in.goMarker = in.runToggle = false; // edge-triggered consumed
+        in.setMarker = in.goMarker = in.runToggle = in.resetScore = false; // edge-triggered consumed
         in.spot = -1;
 
         // ---------- camera: low "filmer" cam ----------

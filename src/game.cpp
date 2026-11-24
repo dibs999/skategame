@@ -402,6 +402,17 @@ void Game::update(const Input& in, float dt) {
     if (in.setMarker) setMarkerHere();
     if (in.goMarker) teleportMarker();
     if (in.spot >= 0) teleportSpot(in.spot);
+    if (in.resetScore) {
+        s.totalScore = 0; s.lineScore = 0; s.mult = 1; s.meatPts = 0;
+        s.lineTricks.clear(); s.runTimer = -1.f;
+        s.trickName = "SCORE RESET"; s.trickT = 1.4f;
+    }
+    // fell out of the world: back to marker or spawn
+    if (!std::isfinite(s.pos.y) || s.pos.y < -8.f) {
+        if (hasMarker) teleportMarker();
+        else { s.pos = {-10, 0, 4}; s.yaw = -0.4f; s.vel = {0, 0, 0}; s.state = S_GROUND; }
+        s.lineScore = 0; s.mult = 1; s.lineTricks.clear();
+    }
 
     s.speed = std::hypot(s.vel.x, s.vel.z);
     s.wheelSpin += s.speed * dt / 0.027f;

@@ -20,7 +20,8 @@ struct Input {
     bool setMarker = false, goMarker = false;
     int spot = -1;
     bool runToggle = false;          // O: start a 2-minute Score Attack
-    // 1-5 teleport to named spots via 'spot'
+    bool resetScore = false;         // Backspace: wipe total/line/meat score
+
 };
 
 struct Particle {
