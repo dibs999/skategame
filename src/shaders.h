@@ -220,6 +220,11 @@ void main(){
     // filmic-ish tonemap
     col = vec3(1.0) - exp(-col * uExposure);
     col = pow(col, vec3(0.85));
+    // skate-video grade: contrast curve, saturation, slight warmth
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, 1.18);
+    col = mix(col, col * col * (3.0 - 2.0 * col), 0.35);
+    col *= vec3(1.02, 1.0, 0.97);
     // vignette
     float vg = 1.0 - uVignette*smoothstep(0.3, 1.6, r2);
     col *= vg;
