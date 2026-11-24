@@ -1,5 +1,6 @@
 // Skater physics, tricks, grinds, bail, scoring, and the articulated model.
 #include "game.h"
+#include "audio.h"
 #include "geom.h"
 #include <cmath>
 #include <algorithm>
@@ -155,6 +156,7 @@ void Game::score(int pts, const char* name) {
 }
 
 void Game::doOllie(float power) {
+    g_audio.fire(AudioFx::POP);
     s.vel.y = 2.6f + power * 3.6f;
     s.state = S_AIR;
     s.airTime = 0;
@@ -235,6 +237,7 @@ void Game::endGrind(bool popOut) {
 
 void Game::bail(const char* text) {
     if (s.state == S_BAIL) return;
+    g_audio.fire(AudioFx::BAIL);
     s.state = S_BAIL;
     s.bailT = 0;
     s.bailText = text;
@@ -274,8 +277,8 @@ void Game::land() {
     }
     s.vel.y = 0;
     s.flip = F_NONE; s.grab = G_NONE;
-    if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); }
-    else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); }
+    if (impact > 7.f) { shake = std::max(shake, 0.55f); fx.dust(s.pos, 12, 1.6f, s.vel * 0.2f); g_audio.fire(AudioFx::LANDHARD); }
+    else if (impact > 2.5f) { shake = std::max(shake, 0.2f); fx.dust(s.pos, 5, 0.9f); g_audio.fire(AudioFx::LAND); }
     if (s.airTime > 0.5f && s.trickName.empty()) score(50, "OLLIE");
     // bank the line
     if (s.lineScore > 0) { s.totalScore += s.lineScore; s.lineScore = 0; s.mult = 1; }
@@ -311,6 +314,9 @@ void Game::update(const Input& in, float dt) {
 
     s.speed = std::hypot(s.vel.x, s.vel.z);
     s.wheelSpin += s.speed * dt / 0.027f;
+    g_audio.roll = s.state == S_GROUND ? std::min(s.speed / 16.f, 0.7f) : 0.f;
+    g_audio.wind = clampf((s.speed - 8.f) / 30.f, 0.f, 0.5f);
+    g_audio.grind = s.state == S_GRIND ? 0.5f : 0.f;
     s.pushAnim = std::max(0.f, s.pushAnim - dt);
     s.trickT = std::max(0.f, s.trickT - dt);
     if (s.trickT <= 0) s.trickName.clear();
@@ -524,7 +530,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     bool bail_ = (s.state == S_BAIL);
     float tuck = air ? clampf(s.airTime * 3.f, 0, 1) * 0.55f : 0;
     if (s.flip != F_NONE) tuck = 0.7f;
-    float hipH = (0.95f - cr * 0.32f) + (air ? 0.15f : 0.f);
+    float hipH = (0.95f - cr * 0.32f) + (air ? 0.15f : 0.f) - tuck * 0.10f;
     Vec3 hipPos = s.pos + Vec3(0, bail_ ? 0.35f : hipH, 0);
     if (bail_) {
         // ragdoll-ish tumble: body pitched over, flailing

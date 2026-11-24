@@ -276,26 +276,3 @@ void main(){
     fragColor = vec4(vColor.rgb, a);
 }
 )";
-
-// Unlit textured quad (session marker flag etc.)
-static const char* UNLIT_FS = R"(
-#version 330 core
-in vec3 vWorld;
-in vec3 vNormal;
-in vec2 vUV;
-in vec4 vColor;
-in vec4 vShadow;
-uniform sampler2D uTex;
-uniform vec3 uCamPos;
-uniform vec3 uFogColor;
-uniform float uFogDensity;
-uniform float uUseTex;
-out vec4 fragColor;
-void main(){
-    vec3 col = vColor.rgb;
-    if(uUseTex > 0.5) col *= texture(uTex, vUV).rgb;
-    float dist = length(uCamPos - vWorld);
-    float fog = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist);
-    fragColor = vec4(mix(col,uFogColor,fog), vColor.a);
-}
-)";

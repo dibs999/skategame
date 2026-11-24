@@ -14,13 +14,15 @@
 #include "game.h"
 #include "vfont.h"
 #include "hud.h"
+#include "audio.h"
 
 int main(int argc, char** argv) {
     bool fullscreen = false;
     for (int i = 1; i < argc; i++)
         if (std::string(argv[i]) == "--fullscreen") fullscreen = true;
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    g_audio.init();
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
