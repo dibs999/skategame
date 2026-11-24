@@ -195,6 +195,8 @@ void Game::startFlip(Flip f) {
     case F_HARD: n = "HARDFLIP"; break;
     case F_VARIALHEEL: n = "VARIAL HEELFLIP"; break;
     case F_INWARD: n = "INWARD HEELFLIP"; break;
+    case F_IMPOSSIBLE: n = "IMPOSSIBLE"; break;
+    case F_BIGSPIN: n = "360 SHOVE-IT"; break;
     default: break;
     }
     int pts = f == F_TREFLIP ? 500 : (f == F_SHOVE ? 250 : (f > F_TREFLIP ? 420 : 300));
@@ -538,8 +540,10 @@ void Game::update(const Input& in, float dt) {
         s.vel.y -= GRAV * dt;
         // trick input
         if (s.flip == F_NONE) {
-            // diagonal combos first (Flick-It style): left+down etc.
-            if (in.trick[0] && in.trick[2]) startFlip(F_VARIALKICK);
+            // opposite pairs first, then diagonals (Flick-It style)
+            if (in.trick[0] && in.trick[1]) startFlip(F_IMPOSSIBLE);
+            else if (in.trick[2] && in.trick[3]) startFlip(F_BIGSPIN);
+            else if (in.trick[0] && in.trick[2]) startFlip(F_VARIALKICK);
             else if (in.trick[1] && in.trick[2]) startFlip(F_VARIALHEEL);
             else if (in.trick[0] && in.trick[3]) startFlip(F_HARD);
             else if (in.trick[1] && in.trick[3]) startFlip(F_INWARD);
@@ -561,6 +565,8 @@ void Game::update(const Input& in, float dt) {
             case F_HARD:       s.boardRoll = -ph * 6.283f; s.boardSpin = -ph * 3.1416f; break;
             case F_VARIALHEEL: s.boardRoll = ph * 6.283f; s.boardSpin = -ph * 3.1416f; break;
             case F_INWARD:     s.boardRoll = ph * 6.283f; s.boardSpin = ph * 3.1416f; break;
+            case F_IMPOSSIBLE: s.boardRoll = ph * 6.283f; s.boardSpin = ph * 6.283f; s.boardRoll += ph * 1.2f; break;
+            case F_BIGSPIN:    s.boardSpin = ph * 6.283f; break;
             default: break;
             }
         }
