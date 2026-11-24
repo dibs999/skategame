@@ -356,6 +356,24 @@ static GLuint genBuilding(int w) {
     return finish(img, w, w);
 }
 
+static GLuint genWater(int w) {
+    auto img = base(w, w, 30, 88, 140);
+    // sun-glitter speckle + soft wave bands
+    for (int y = 0; y < w; y++)
+        for (int x = 0; x < w; x++) {
+            float v = fbm2(x * 0.045f, y * 0.045f, 31, 4);
+            float band = 0.5f + 0.5f * std::sin(y * 0.11f + v * 6.f);
+            unsigned char* p = &img[(y * w + x) * 4];
+            float l = 0.75f + v * 0.5f + band * 0.18f;
+            p[0] = (unsigned char)clampf(p[0] * l + band * 14, 0, 255);
+            p[1] = (unsigned char)clampf(p[1] * l + band * 18, 0, 255);
+            p[2] = (unsigned char)clampf(p[2] * l + band * 20, 0, 255);
+        }
+    unsigned seed = 77;
+    speckle(img, w, w, 700, 220, 235, 245, 255, seed);
+    return finish(img, w, w);
+}
+
 void generateAllTextures(TexSet& t) {
     g_seed = 12345;
     t.concrete = genConcrete(512, 165, true, true);
@@ -372,4 +390,5 @@ void generateAllTextures(TexSet& t) {
     t.leaf = genLeaf(256);
     t.curbPaint = genCurbPaint(256);
     t.building = genBuilding(256);
+    t.water = genWater(256);
 }

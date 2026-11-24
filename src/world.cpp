@@ -470,7 +470,7 @@ void World::build(const TexSet& tex) {
         auto& oc = cx.mb();
         oc.setColor({0.15f, 0.4f, 0.62f});
         oc.quad({-200, -0.5f, 120}, {200, -0.5f, 120}, {200, -0.5f, 300}, {-200, -0.5f, 300}, {0, 1, 0}, 10, 10);
-        cx.add(oc, {0, 1.f, {0.15f,0.4f,0.62f}, 0.5f, 60.f, 1.f, 0.3f, 0.f}, false);
+        cx.add(oc, {tex.water, 14.f, {0.9f,0.95f,1.05f}, 0.55f, 80.f, 1.f, 0.35f, 0.f}, false);
         // boundary walls (visual)
         auto& bw = cx.mb();
         bw.setColor({1, 1, 1});
