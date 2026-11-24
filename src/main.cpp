@@ -242,6 +242,7 @@ int main(int argc, char** argv) {
         sky.setMat4("uMVP", Mat4::mul(vp, skyM));
         sky.setVec3("uSunDir", sunDir);
         sky.setF("uTime", timeAcc);
+        sky.setF("uDusk", dusk ? 1.f : 0.f);
         skyCube.draw();
         glDepthFunc(GL_LESS);
         glDepthMask(GL_TRUE);

@@ -123,6 +123,7 @@ static const char* SKY_FS = R"(
 in vec3 vDir;
 uniform vec3 uSunDir;
 uniform float uTime;
+uniform float uDusk;
 out vec4 fragColor;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p){
@@ -140,25 +141,25 @@ void main(){
     vec3 d = normalize(vDir);
     float h = d.y;
     // sky gradient: bright hazy horizon -> deep blue zenith
-    vec3 zen = vec3(0.16,0.38,0.78);
-    vec3 hor = vec3(0.75,0.85,0.95);
+    vec3 zen = mix(vec3(0.16,0.38,0.78), vec3(0.10,0.10,0.30), uDusk);
+    vec3 hor = mix(vec3(0.75,0.85,0.95), vec3(0.95,0.45,0.22), uDusk);
     vec3 col = mix(hor, zen, pow(clamp(h*1.4+0.15,0.0,1.0),0.7));
     // sun disc + glare halo
     float sd = dot(d, normalize(uSunDir));
-    col += vec3(1.0,0.95,0.80) * pow(max(sd,0.0), 1200.0) * 8.0;   // disc
-    col += vec3(1.0,0.92,0.70) * pow(max(sd,0.0), 180.0) * 0.9;    // corona
-    col += vec3(1.0,0.90,0.65) * pow(max(sd,0.0), 8.0) * 0.22;     // broad haze
+    col += mix(vec3(1.0,0.95,0.80), vec3(1.0,0.55,0.25), uDusk) * pow(max(sd,0.0), 1200.0) * 8.0;
+    col += mix(vec3(1.0,0.92,0.70), vec3(1.0,0.50,0.22), uDusk) * pow(max(sd,0.0), 180.0) * (0.9 + 1.4*uDusk);
+    col += mix(vec3(1.0,0.90,0.65), vec3(0.9,0.45,0.25), uDusk) * pow(max(sd,0.0), 8.0) * (0.22 + 0.4*uDusk);
     // clouds: only above horizon
     if(h > 0.01){
         vec2 cuv = d.xz / (h + 0.18);
         float cl = fbm(cuv*1.6 + vec2(uTime*0.006, uTime*0.002));
         float cm = smoothstep(0.55, 0.8, cl) * smoothstep(0.0, 0.25, h);
-        col = mix(col, vec3(1.0,1.0,1.0), cm*0.75);
+        col = mix(col, mix(vec3(1.0), vec3(1.0,0.55,0.40), uDusk), cm*(0.75 - 0.2*uDusk));
         float wisp = fbm(cuv*4.0 - vec2(uTime*0.01, 0.0));
-        col += vec3(1.0) * smoothstep(0.7,0.95,wisp) * 0.06;
+        col += mix(vec3(1.0), vec3(0.9,0.5,0.35), uDusk) * smoothstep(0.7,0.95,wisp) * 0.06;
     }
     // horizon warm tint opposite sun
-    col = mix(col, vec3(0.85,0.78,0.70), pow(1.0-abs(h),8.0)*0.35);
+    col = mix(col, mix(vec3(0.85,0.78,0.70), vec3(0.65,0.30,0.28), uDusk), pow(1.0-abs(h),8.0)*0.35);
     fragColor = vec4(col,1.0);
 }
 )";
