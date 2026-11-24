@@ -152,6 +152,7 @@ Mat4 Game::boardMatrix() const {
 }
 
 void Game::score(int pts, const char* name) {
+    g_audio.fire(AudioFx::DING);
     s.lineScore += pts * s.mult;
     s.mult = std::min(s.mult + 1, 9);
     s.comboT = 3.0f;

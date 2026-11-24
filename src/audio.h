@@ -9,7 +9,7 @@
 struct AudioFx {
     std::atomic<float> roll{0}, wind{0}, grind{0};
     std::atomic<unsigned> ev{0};
-    enum Ev : unsigned { POP = 1, LAND = 2, LANDHARD = 4, BAIL = 8 };
+    enum Ev : unsigned { POP = 1, LAND = 2, LANDHARD = 4, BAIL = 8, DING = 16 };
 
     bool init() {
         SDL_AudioSpec want{}, got{};
@@ -27,7 +27,7 @@ private:
     SDL_AudioDeviceID dev = 0;
     unsigned rng = 0x9E3779B9u;
     float lp1 = 0, lp2 = 0, hpLp = 0, osc = 0, ph = 0;
-    float popE = 0, landE = 0, hardE = 0, bailE = 0;
+    float popE = 0, landE = 0, hardE = 0, bailE = 0, dingE = 0;
 
     float noise() {
         rng = rng * 1664525u + 1013904223u;
@@ -40,6 +40,7 @@ private:
         if (e & LAND) landE = 1;
         if (e & LANDHARD) hardE = 1;
         if (e & BAIL) bailE = 1;
+        if (e & DING) dingE = 1;
         float rl = roll.load(std::memory_order_relaxed);
         float wl = wind.load(std::memory_order_relaxed);
         float gl = grind.load(std::memory_order_relaxed);
@@ -64,6 +65,8 @@ private:
             if (landE > 0.001f) { s += landE * (std::sin(landE * 500.f) * 0.45f + nz * 0.3f); landE *= 0.9955f; }
             if (hardE > 0.001f) { s += hardE * (std::sin(hardE * 380.f) * 0.6f + nz * 0.45f); hardE *= 0.9945f; }
             if (bailE > 0.001f) { s += bailE * (nz * 0.5f + std::sin(bailE * 260.f) * 0.4f); bailE *= 0.996f; }
+            // trick chime: two-tone decaying ping
+            if (dingE > 0.001f) { s += dingE * (std::sin(dingE * 900.f) * 0.22f + std::sin(dingE * 1500.f) * 0.1f); dingE *= 0.9978f; }
             s *= 0.6f;
             out[i] = s > 1 ? 1 : (s < -1 ? -1 : s);
         }
