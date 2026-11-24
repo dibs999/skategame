@@ -323,6 +323,39 @@ static GLuint genCurbPaint(int w) {
     return finish(img, w, w);
 }
 
+static GLuint genBuilding(int w) {
+    // concrete frame + window grid: mostly dark glass, a few lit
+    auto img = base(w, w, 188, 184, 178);
+    int cols = 6, rows = 8;
+    unsigned seed = 9;
+    for (int ry = 0; ry < rows; ry++)
+        for (int cx = 0; cx < cols; cx++) {
+            int x0 = cx * w / cols + w / cols / 6, x1 = (cx + 1) * w / cols - w / cols / 6;
+            int y0 = ry * w / rows + w / rows / 5, y1 = (ry + 1) * w / rows - w / rows / 7;
+            float lit = hash2(cx * 3 + ry, ry * 7 + cx);
+            Vec3 glass = lit > 0.82f ? Vec3{252, 214, 150} : Vec3{52, 66, 84};
+            float tint = 0.8f + hash2(cx, ry) * 0.45f;
+            for (int y = y0; y < y1; y++)
+                for (int x = x0; x < x1; x++) {
+                    // sky reflection gradient: lighter toward top of each pane
+                    float g = glass.z * tint + (y - y0) / (float)(y1 - y0) * 26;
+                    unsigned char* p = &img[(y * w + x) * 4];
+                    p[0] = (unsigned char)clampf(glass.x * tint + (y - y0) * 0.4f, 0, 255);
+                    p[1] = (unsigned char)clampf(glass.y * tint + (y - y0) * 0.5f, 0, 255);
+                    p[2] = (unsigned char)clampf(g, 0, 255);
+                }
+        }
+    // grime streaks + slab lines between floors
+    strokes(img, w, w, 50, 120, 118, 112, 60, seed, 30, false);
+    for (int ry = 0; ry < rows; ry++)
+        for (int x = 0; x < w; x++) {
+            int y = ry * w / rows;
+            unsigned char* p = &img[(y * w + x) * 4];
+            for (int c = 0; c < 3; c++) p[c] = (unsigned char)(p[c] * 0.82f);
+        }
+    return finish(img, w, w);
+}
+
 void generateAllTextures(TexSet& t) {
     g_seed = 12345;
     t.concrete = genConcrete(512, 165, true, true);
@@ -338,4 +371,5 @@ void generateAllTextures(TexSet& t) {
     t.bark = genBark(128);
     t.leaf = genLeaf(256);
     t.curbPaint = genCurbPaint(256);
+    t.building = genBuilding(256);
 }
