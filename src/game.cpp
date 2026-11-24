@@ -128,6 +128,9 @@ Mat4 Game::boardMatrix() const {
         float boardY = s.pos.y + 0.075f;
         Mat4 basis = Mat4::fromBasis(d, up2, d.cross(up2), {s.pos.x, boardY, s.pos.z});
         Mat4 m = basis;
+        // smith/crooked ride one truck: deck tips onto the rail
+        if (s.grindType == 2) m = Mat4::mul(m, Mat4::rotateZ(-0.28f));
+        if (s.grindType == 3) m = Mat4::mul(m, Mat4::rotateZ(0.30f));
         m = Mat4::mul(m, Mat4::rotateY(s.boardSpin));
         m = Mat4::mul(m, Mat4::rotateX(s.boardRoll));
         return m;
@@ -188,7 +191,9 @@ void Game::startFlip(Flip f) {
     s.trickName = n; s.trickT = 2.2f;
 }
 
-void Game::tryGrind() {
+static const char* GRIND_NAMES[] = {"50-50", "BOARDSLIDE", "SMITH GRIND", "CROOKED", "LIPSLIDE"};
+
+void Game::tryGrind(float steer) {
     int e = world.findGrindEdge(s.pos);
     if (e < 0) return;
     auto& g = world.edges[e];
@@ -197,6 +202,10 @@ void Game::tryGrind() {
     Vec3 f(std::cos(s.yaw), 0, std::sin(s.yaw));
     float align = std::abs(f.dot(dir));
     s.grindBoardslide = align < 0.55f;
+    // steer input at lock-on picks the grind: angled onto the rail = crooked,
+    // back truck only = smith, board popped over = lipslide
+    if (s.grindBoardslide) s.grindType = steer > 0.3f ? 4 : 1;
+    else                   s.grindType = steer > 0.3f ? 2 : (steer < -0.3f ? 3 : 0);
     s.grindEdge = e;
     s.state = S_GRIND;
     s.balance = 0;
@@ -209,15 +218,16 @@ void Game::tryGrind() {
     Vec3 c = g.a + ab * t;
     s.pos = {c.x, c.y + 0.02f, c.z};
     s.vel = dirV * std::max(s.vel.len() * 0.9f, 2.f);
-    s.trickName = s.grindBoardslide ? "BOARDSLIDE" : "50-50";
+    s.trickName = GRIND_NAMES[s.grindType];
     s.trickT = 2.2f;
     fx.sparks(s.pos, dir * -1.f, 6);
     shake = std::max(shake, 0.25f);
 }
 
 void Game::endGrind(bool popOut) {
-    int pts = 100 + (int)(s.grindDist * 45.f);
-    score(pts, s.grindBoardslide ? "BOARDSLIDE" : "50-50");
+    int base = s.grindType == 4 ? 150 : (s.grindType >= 2 ? 140 : (s.grindType == 1 ? 120 : 100));
+    int pts = base + (int)(s.grindDist * 45.f);
+    score(pts, GRIND_NAMES[s.grindType]);
     s.grindEdge = -1;
     if (popOut) {
         s.vel.y = 3.6f;
@@ -501,7 +511,7 @@ void Game::update(const Input& in, float dt) {
                 Vec3 d = (e.b - e.a).normalized();
                 bool locked = s.popTimer > 0 || s.airTime > 0.4f ||
                               std::abs(s.vel.x * d.x + s.vel.z * d.z) > 1.0f;
-                if (locked) { tryGrind(); break; }
+                if (locked) { tryGrind(steer); break; }
             }
             if (s.pos.y <= ground + 0.02f) {
                 // landing into a held manual keeps the line alive
@@ -560,7 +570,7 @@ void Game::update(const Input& in, float dt) {
             s.airTime = 0; s.fallStart = s.pos.y;
             s.trickWindow = 0.25f;
             s.flip = F_NONE; s.flipPhase = 0; s.boardRoll = 0; s.boardSpin = 0;
-            s.grab = G_NONE;
+            s.grab = G_NONE; s.spinAmt = 0;
             break;
         }
         s.pos.y = ground;

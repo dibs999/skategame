@@ -69,6 +69,7 @@ struct Skater {
     float balance = 0;      // -1..1, |1| = bail
     float grindDist = 0;
     bool grindBoardslide = false;
+    int grindType = 0;      // 0=50-50 1=boardslide 2=smith 3=crooked 4=lipslide
     int manualDir = 0;      // +1 manual (back trucks), -1 nose manual
     // bail
     float bailT = 0;
@@ -107,7 +108,7 @@ struct Game {
 
     void doOllie(float power);
     void startFlip(Flip f);
-    void tryGrind();
+    void tryGrind(float steer);
     void endGrind(bool popOut);
     void bail(const char* text);
     void land(bool bankLine = true);
