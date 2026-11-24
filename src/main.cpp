@@ -14,13 +14,15 @@
 #include "game.h"
 #include "vfont.h"
 #include "hud.h"
+#include "audio.h"
 
 int main(int argc, char** argv) {
     bool fullscreen = false;
     for (int i = 1; i < argc; i++)
         if (std::string(argv[i]) == "--fullscreen") fullscreen = true;
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    g_audio.init();
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -95,7 +97,7 @@ int main(int argc, char** argv) {
     float camRoll = 0;
 
     Input in;
-    bool prevJump = false, prevSet = false, prevGo = false;
+    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevSpot[5] = {};
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
     double perfFreq = (double)SDL_GetPerformanceFrequency();
@@ -121,7 +123,7 @@ int main(int argc, char** argv) {
         }
         const Uint8* k = SDL_GetKeyboardState(nullptr);
         in.push = k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP];
-        in.brake = k[SDL_SCANCODE_S] || (k[SDL_SCANCODE_DOWN] && game.s.state == S_GROUND);
+        in.brake = k[SDL_SCANCODE_S] || (k[SDL_SCANCODE_DOWN] && game.s.state != S_AIR);
         in.left = k[SDL_SCANCODE_A] || (k[SDL_SCANCODE_LEFT] && game.s.state == S_GROUND);
         in.right = k[SDL_SCANCODE_D] || (k[SDL_SCANCODE_RIGHT] && game.s.state == S_GROUND);
         in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_RCTRL] || k[SDL_SCANCODE_C];
@@ -134,8 +136,17 @@ int main(int argc, char** argv) {
         in.grab[1] = k[SDL_SCANCODE_E];
         in.grab[2] = k[SDL_SCANCODE_F];
         in.grab[3] = k[SDL_SCANCODE_G];
+        in.manual = k[SDL_SCANCODE_R];
+        in.noseManual = k[SDL_SCANCODE_V];
         in.setMarker = k[SDL_SCANCODE_M] && !prevSet;
         in.goMarker = k[SDL_SCANCODE_T] && !prevGo;
+        in.runToggle = k[SDL_SCANCODE_O] && !prevRun;
+        prevRun = k[SDL_SCANCODE_O];
+        in.spot = -1;
+        for (int i = 0; i < 5; i++)
+            if (k[SDL_SCANCODE_1 + i] && !prevSpot[i]) in.spot = i;
+        bool spotNow[5];
+        for (int i = 0; i < 5; i++) { spotNow[i] = k[SDL_SCANCODE_1 + i]; prevSpot[i] = spotNow[i]; }
         bool jumpNow = in.jump;
         in.jump = in.jump && !prevJump;
         prevJump = jumpNow; prevSet = k[SDL_SCANCODE_M]; prevGo = k[SDL_SCANCODE_T];
@@ -147,7 +158,8 @@ int main(int argc, char** argv) {
             game.update(in, dt);
             rem -= dt;
         }
-        in.setMarker = in.goMarker = false; // edge-triggered consumed
+        in.setMarker = in.goMarker = in.runToggle = false; // edge-triggered consumed
+        in.spot = -1;
 
         // ---------- camera: low "filmer" cam ----------
         {
@@ -313,6 +325,7 @@ int main(int argc, char** argv) {
         comp.setF("uVignette", 0.25f);
         comp.setF("uExposure", 1.35f);
         comp.setF("uFlash", game.flash * 0.4f);
+        comp.setF("uTime", SDL_GetTicks() * 0.001f);
         drawFSQ();
         glEnable(GL_DEPTH_TEST);
 
@@ -323,7 +336,7 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         line.use();
         line.setMat4("uMVP", ortho);
-        glLineWidth(2.f);
+        glLineWidth(2.5f);
         hud.draw(lb, game, W, H);
         lb.flush();
         glDisable(GL_BLEND);
