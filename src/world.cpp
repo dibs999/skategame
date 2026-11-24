@@ -110,6 +110,18 @@ bool World::collideWalls(Vec3& pos, Vec3& vel) const {
             hit = true;
         }
     }
+    // height fields whose surface is well above the skater are walls
+    // (all fields ramp along x, so push out along x)
+    for (auto& f : g_fields) {
+        if (pos.x < f.x0 - r || pos.x > f.x1 + r ||
+            pos.z < f.z0 - r || pos.z > f.z1 + r) continue;
+        float hh = f.eval(pos.x, pos.z);
+        if (hh > -1e8f && hh > pos.y + STEP + 0.05f) {
+            if (pos.x - f.x0 < f.x1 - pos.x) { pos.x = f.x0 - r; if (vel.x > 0) vel.x = 0; }
+            else { pos.x = f.x1 + r; if (vel.x < 0) vel.x = 0; }
+            hit = true;
+        }
+    }
     if (pos.x < -72) { pos.x = -72; if (vel.x < 0) vel.x = 0; hit = true; }
     if (pos.x > 104) { pos.x = 104; if (vel.x > 0) vel.x = 0; hit = true; }
     if (pos.z < -47) { pos.z = -47; if (vel.z < 0) vel.z = 0; hit = true; }
@@ -176,7 +188,7 @@ void World::build(const TexSet& tex) {
     addHF(-6, 12, -4, 16, 1, 0.0f, 0.9f);        // funbox west bank
     addHF(0, 12, 2, 16, 1, 0.9f, 0.0f);          // funbox east bank
     addHF(56, MEGA_Z0, 64, MEGA_Z1, 2, 64, 8);   // mega roll-in (rises toward -x)
-    addHF(69, MEGA_Z0, 73, MEGA_Z1, 1, 0.0f, 1.4f); // kicker
+    addHF(69, MEGA_Z0, 73, MEGA_Z1, 0, 69, 5.5f); // kicker (46 deg lip)
     addHF(79, MEGA_Z0, 91, MEGA_Z1, 1, 4.0f, 0.0f); // landing
     addHF(91, MEGA_Z0, 98, MEGA_Z1, 0, 91, 7);   // big quarter (rises toward +x)
 
@@ -393,7 +405,7 @@ void World::build(const TexSet& tex) {
         m.setColor({1, 1, 1});
         m.box({53, 4, zc}, {3, 4, mw / 2});                    // tower
         m.quarterPipe({64, 0, zc}, {-1, 0, 0}, mw, 8, 18);     // roll-in
-        m.bank({69, 0, zc}, {1, 0, 0}, mw, 4, 1.4f);           // kicker
+        m.quarterPipe({69, 0, zc}, {1, 0, 0}, mw, 5.5f, 10, true, 0.81f); // kicker
         m.bank({91, 0, zc}, {-1, 0, 0}, mw, 12, 4.0f);         // landing
         m.quarterPipe({91, 0, zc}, {1, 0, 0}, mw, 7, 18);      // big quarter
         m.box({102, 3.5f, zc}, {4, 3.5f, mw / 2});             // deck
