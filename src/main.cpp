@@ -116,9 +116,11 @@ int main(int argc, char** argv) {
             if (ev.type == SDL_QUIT) running = false;
             if (ev.type == SDL_WINDOWEVENT && ev.window.event == SDL_WINDOWEVENT_RESIZED) {
                 W = ev.window.data1; H = ev.window.data2;
-                sceneFbo.create(W, H, false, true);
-                bloomA.create(W / 4, H / 4, false, true);
-                bloomB.create(W / 4, H / 4, false, true);
+                float rs = std::min(1.f, std::min(1440.f / W, 810.f / H));
+                int rw = (int)(W * rs), rh = (int)(H * rs);
+                sceneFbo.create(rw, rh, false, true);
+                bloomA.create(rw / 4, rh / 4, false, true);
+                bloomB.create(rw / 4, rh / 4, false, true);
             }
             if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) running = false;
         }
