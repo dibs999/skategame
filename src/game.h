@@ -1,6 +1,7 @@
 // Game state: skater physics, trick/grind systems, bail, scoring, session marker,
 // particles, and the animated skater + board model.
 #pragma once
+#include <map>
 #include "math3d.h"
 #include "world.h"
 #include "glcore.h"
@@ -16,7 +17,12 @@ struct Input {
     bool jump = false;                     // quick pop / exit grind (Space)
     bool trick[4] = {false, false, false, false}; // arrows: L,R,Down,Up while airborne
     bool grab[4] = {false, false, false, false};  // Q,E,F,G in air
+    bool manual = false, noseManual = false;      // R / V hold
     bool setMarker = false, goMarker = false;
+    int spot = -1;
+    bool runToggle = false;          // O: start a 2-minute Score Attack
+    bool resetScore = false;         // Backspace: wipe total/line/meat score
+
 };
 
 struct Particle {
@@ -35,8 +41,8 @@ struct Particles {
     void fill(SpriteBatch& sb) const;
 };
 
-enum SState { S_GROUND, S_AIR, S_GRIND, S_BAIL };
-enum Flip { F_NONE, F_KICK, F_HEEL, F_SHOVE, F_TREFLIP };
+enum SState { S_GROUND, S_AIR, S_GRIND, S_MANUAL, S_BAIL };
+enum Flip { F_NONE, F_KICK, F_HEEL, F_SHOVE, F_TREFLIP, F_VARIALKICK, F_HARD, F_VARIALHEEL, F_INWARD, F_IMPOSSIBLE, F_BIGSPIN };
 enum Grab { G_NONE, G_INDY, G_MELON, G_NOSE, G_TAIL };
 
 struct Board {
@@ -55,6 +61,7 @@ struct Skater {
     // air/trick
     float airTime = 0;
     float trickWindow = 0;  // time after pop to register a flip
+    float spinAmt = 0;      // radians rotated during current air
     Flip flip = F_NONE;
     float flipPhase = 0;    // 0..1 progress of flip anim
     float boardRoll = 0, boardSpin = 0; // displayed flip angles
@@ -63,19 +70,35 @@ struct Skater {
     float fallStart = 0;    // y at leaving ground
     // grind
     int grindEdge = -1;
+    float grindLockout = 0;   // no relock right after leaving an edge
+    float arrowT[4] = {-1, -1, -1, -1};  // first-press time per trick arrow
     float grindT = 0;       // param along edge
     float balance = 0;      // -1..1, |1| = bail
     float grindDist = 0;
     bool grindBoardslide = false;
+    int grindType = 0;      // 0=50-50 1=boardslide 2=smith 3=crooked 4=lipslide
+    int manualDir = 0;      // +1 manual (back trucks), -1 nose manual
+    float revertT = 0;      // post-landing pivot
+    int revertDir = 0;
+    unsigned gapMask = 0;   // gaps already hit this air
     // bail
     float bailT = 0;
     std::string bailText;
     Board looseBoard;
     unsigned flailSeed = 1;
     // score
-    int lineScore = 0, totalScore = 0, mult = 1;
+    int lineScore = 0, totalScore = 0, mult = 1, bestScore = 0;
     float comboT = 0;
     std::string trickName;
+    std::string lineTricks;   // "+ "-joined chain of tricks in the current line
+    float runTimer = -1.f;    // >0 while a Score Attack run is live
+    int runBase = 0;          // totalScore at run start
+    int lastRun = 0;          // most recent finished run's points
+    int meatPts = 0;          // Hall of Meat running total
+    int meatGain = 0;         // points earned by the last bail
+    float wallRide = 0;       // >0 while riding a wall (timed)
+    Vec3 wallN{0, 0, 0};      // horizontal wall normal (push direction)
+    float wallSide = 1;       // roll direction into the wall
     float trickT = 0;
     bool pendingLand = false;
     float speed = 0;
@@ -94,9 +117,12 @@ struct Game {
     float markerYaw = 0;
     // camera fx
     float shake = 0, flash = 0;
+    float now = 0;              // game clock for input chord windows
     float fovBoost = 0;
     // skater/board meshes (built once)
     Mesh mCapsule, mSphere, mBox, mDeck, mDeckTop, mTruck, mWheel, mMarker, mFlag;
+    std::map<std::string, Mesh> skaterParts;
+    bool hasSkaterMesh = false;
 
     void init(const TexSet& t);
     void update(const Input& in, float dt);
@@ -104,13 +130,15 @@ struct Game {
 
     void doOllie(float power);
     void startFlip(Flip f);
-    void tryGrind();
+    void tryGrind(float steer);
     void endGrind(bool popOut);
     void bail(const char* text);
-    void land();
+    void land(bool bankLine = true, float steer = 0.f);
+    void endManual();
     void score(int pts, const char* name);
     void setMarkerHere();
     void teleportMarker();
+    void teleportSpot(int i);
 
     void drawSkater(std::vector<DrawItem>& out) const;
     void drawBoard(std::vector<DrawItem>& out, const Mat4& bm, bool loose) const;
