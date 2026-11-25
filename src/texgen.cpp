@@ -303,9 +303,10 @@ static GLuint genLeaf(int w) {
             float n = fbm2(u * 20, v * 20, 20, 5);
             float t = 0.6f + n * 0.85f;
             unsigned char* p = &img[(y * w + x) * 4];
-            p[0] = (unsigned char)clampf(60 * t, 0, 255);
-            p[1] = (unsigned char)clampf(130 * t, 0, 255);
-            p[2] = (unsigned char)clampf(50 * t, 0, 255);
+            // olive-drab foliage, desaturated like coastal sycamores — not arcade green
+            p[0] = (unsigned char)clampf(72 * t, 0, 255);
+            p[1] = (unsigned char)clampf(96 * t, 0, 255);
+            p[2] = (unsigned char)clampf(52 * t, 0, 255);
         }
     return finish(img, w, w);
 }
