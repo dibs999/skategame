@@ -83,12 +83,15 @@ def make_box(name, scale, bevel=0.02):
         v.co = (v.co.x, v.co.y - top, v.co.z)
     return o
 
-# torso: wide ellipsoid, origin at shoulder line (~top), extends down to hips
-make_ball("torso", (0.175, 0.21, 0.105))
+# torso: tapered cylinder (waist narrower, chest wide), squashed front-to-back,
+# origin at shoulder line, extends down to hips
+torso = make_limb("torso", 0.175, 0.115, 0.42, seg=16)
+for v in torso.data.vertices:
+    v.co = (v.co.x, v.co.y, v.co.z * 0.62)   # flatten front-back
 # pelvis/hips block
 make_ball("pelvis", (0.165, 0.12, 0.105))
 # head: origin at neck top, extends down? better: center-ish. use ball with origin at top
-make_ball("head", (0.09, 0.11, 0.095), seg=16, rings=12)
+make_ball("head", (0.082, 0.105, 0.088), seg=18, rings=14)
 # cap brim: flattened box
 make_box("cap", (0.09, 0.02, 0.11))
 # upper/lower arms: slim tapered cylinders
