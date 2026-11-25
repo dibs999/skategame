@@ -455,6 +455,24 @@ void World::build(const TexSet& tex) {
         for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
             pl.cylinder({p.x, 0, p.y}, {p.x, 0.55f, p.y}, 1.1f, 20);
         cx.add(pl, {tex.concrete, 0.5f, {0.72f, 0.38f, 0.25f}, 0.15f, 24.f, 1.f, 0.f, 0.f});
+        // metal coping strips on ledge + manual pad edges — the defining Skate 3
+        // ledge detail, and the visual anchor for where grinds lock
+        auto& cp = cx.mb();
+        cp.setColor({1, 1, 1});
+        auto strip = [&](float x0, float z0, float x1, float z1, float y) {
+            // thin metal strip along the edge segment
+            float cx2 = (x0 + x1) / 2, cz2 = (z0 + z1) / 2;
+            float hx = std::abs(x1 - x0) / 2 + 0.02f, hz = std::abs(z1 - z0) / 2 + 0.02f;
+            cp.box({cx2, y - 0.015f, cz2}, {std::max(hx, 0.025f), 0.015f, std::max(hz, 0.025f)});
+        };
+        strip(-4.5f, -4, 0, -4, 0.45f); strip(-4.5f, -2.2f, 0, -2.2f, 0.45f);
+        strip(31, 6, 36.5f, 6, 0.5f); strip(31, 7.7f, 36.5f, 7.7f, 0.5f);
+        strip(-4, 12, 0, 12, 0.9f); strip(-4, 16, 0, 16, 0.9f);
+        strip(-18.6f, -15.2f, -13.4f, -15.2f, 0.24f); strip(-18.6f, -12.8f, -13.4f, -12.8f, 0.24f);
+        strip(11.4f, -25.2f, 16.6f, -25.2f, 0.24f); strip(11.4f, -22.8f, 16.6f, -22.8f, 0.24f);
+        strip(-26.6f, 28.8f, -21.4f, 28.8f, 0.24f); strip(-26.6f, 31.2f, -21.4f, 31.2f, 0.24f);
+        strip(19.4f, 20.8f, 24.6f, 20.8f, 0.24f); strip(19.4f, 23.2f, 24.6f, 23.2f, 0.24f);
+        cx.add(cp, {tex.metal, 0.8f, {0.88f,0.9f,0.94f}, 1.0f, 110.f, 1.f, 0.85f, 0.f});
     }
     // parked cars on the asphalt lot
     {
