@@ -650,8 +650,22 @@ void World::build(const TexSet& tex) {
         m.bank({-26, 0, -12}, {1, 0, 0}, 4, 4, 0.8f);   // kicker
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
     }
+    // picnic table — Blender asset when present
+    std::map<std::string, Mesh> picParts;
+    bool hasPicnic = loadObjParts("assets/picnic.obj", picParts) ||
+                     loadObjParts("../assets/picnic.obj", picParts);
+    static std::map<std::string, Mesh> picStore;
+    if (hasPicnic) picStore = std::move(picParts);
+    if (hasPicnic) {
+        for (auto& kv : picStore) {
+            Material mm = kv.first.rfind("wood", 0) == 0
+                ? Material{tex.wood, 0.6f, {1,1,1}, 0.25f, 40.f, 1.f, 0.f, 0.f}
+                : Material{tex.metal, 0.4f, {0.7f,0.72f,0.75f}, 0.5f, 90.f, 1.f, 0.4f, 0.f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
+    }
     // picnic table (wooden top + seats, metal legs)
-    {
+    if (!hasPicnic) {
         auto& m = cx.mb();
         m.setColor({1, 1, 1});
         m.box({8, 0.72f, -22}, {0.85f, 0.035f, 0.65f});
