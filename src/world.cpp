@@ -653,6 +653,13 @@ void World::build(const TexSet& tex) {
             float bh = 10 + randf(sd) * 26, bs = 8 + randf(sd) * 10;
             addTower(bx, bz, bh, bs, (i + 1) % 3);
         }
+        // east + west flanks: close the ring so no horizon direction is empty
+        for (int i = 0; i < 8; i++) {
+            float bz = -60 + randf(sd) * 120;
+            float bh = 11 + randf(sd) * 24, bs = 9 + randf(sd) * 9;
+            addTower(-105 - randf(sd) * 35, bz, bh, bs, i % 3);
+            addTower(105 + randf(sd) * 35, bz, bh * (0.8f + randf(sd) * 0.5f), bs, (i + 2) % 3);
+        }
         cx.add(groups[0], {tex.building, 1.0f, {0.75f,0.82f,0.95f}, 0.15f, 24.f, 1.f, 0.25f, 0.f}, false); // glass towers
         cx.add(groups[1], {tex.building, 0.8f, {1.0f,0.92f,0.80f}, 0.08f, 16.f, 1.f, 0.f, 0.f}, false);   // warm concrete
         cx.add(groups[2], {tex.building, 1.3f, {0.72f,0.74f,0.80f}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);   // plain massing
