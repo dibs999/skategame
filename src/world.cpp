@@ -620,8 +620,14 @@ void World::build(const TexSet& tex) {
         lg.cylinder({7.3f, 0.5f, -22}, {8.7f, 0.5f, -22}, 0.03f, 8);        // brace
         cx.add(lg, {tex.metal, 0.4f, {0.7f,0.72f,0.75f}, 0.5f, 90.f, 1.f, 0.4f, 0.f});
     }
+    // Blender mini ramp asset replaces the procedural shell when present
+    std::map<std::string, Mesh> miniParts;
+    bool hasMini = loadObjParts("assets/miniramp.obj", miniParts) ||
+                   loadObjParts("../assets/miniramp.obj", miniParts);
+    static std::map<std::string, Mesh> miniStore;
+    if (hasMini) miniStore = std::move(miniParts);
     // mini ramp (plywood transitions + decks + coping)
-    {
+    if (!hasMini) {
         auto& m = cx.mb();
         m.setColor({1, 1, 1});
         m.quarterPipe({44.5f, 0, -34}, {-1, 0, 0}, 8, 2.5f, 12);  // west pipe
@@ -635,6 +641,14 @@ void World::build(const TexSet& tex) {
         cp.cylinder({42, 2.52f, -38}, {42, 2.52f, -30}, 0.045f, 10);
         cp.cylinder({52, 2.52f, -38}, {52, 2.52f, -30}, 0.045f, 10);
         cx.add(cp, {tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
+    }
+    if (hasMini) {
+        for (auto& kv : miniStore) {
+            Material mm = kv.first.rfind("wood", 0) == 0
+                ? Material{tex.wood, 0.8f, {1,1,1}, 0.22f, 30.f, 1.f, 0.f, 0.f}
+                : Material{tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
     }
     // Blender mega ramp asset replaces the procedural shells when present
     std::map<std::string, Mesh> megaParts;
