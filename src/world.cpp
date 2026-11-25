@@ -630,6 +630,20 @@ void World::build(const TexSet& tex) {
         lamp(28, -14); lamp(28, 18); lamp(-44, 0); lamp(48, 24);
         cx.add(lp, {tex.metal, 1.f, {0.28f, 0.30f, 0.33f}, 0.7f, 70.f, 1.f, 0.5f, 0.f});
     }
+    // sponsor-style banners on the lamp posts: color rectangles at height
+    {
+        auto& bn = cx.mb();
+        auto banner = [&](float x, float z, const Vec3& col) {
+            bn.setColor(col);
+            bn.box({x, 3.6f, z}, {0.02f, 0.9f, 0.5f});
+        };
+        banner(-20, -14, {0.85f, 0.15f, 0.2f}); banner(-20, 18, {0.1f, 0.45f, 0.85f});
+        banner(6, -18, {0.95f, 0.75f, 0.1f});   banner(6, 20, {0.15f, 0.7f, 0.3f});
+        banner(28, -14, {0.85f, 0.15f, 0.2f});  banner(28, 18, {0.1f, 0.45f, 0.85f});
+        banner(-44, 0, {0.95f, 0.75f, 0.1f});   banner(48, 24, {0.15f, 0.7f, 0.3f});
+        bn.setColor({1, 1, 1});
+        cx.add(bn, {0, 1.f, {1,1,1}, 0.1f, 12.f, 1.f, 0.f, 0.f});
+    }
     // traffic cones: bright orange color pops scattered as skate obstacles
     {
         auto& cn = cx.mb();
