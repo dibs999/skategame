@@ -48,4 +48,5 @@ for si in range(NS):
             BX + math.cos(a0) * R, 0.05, BZ + math.sin(a0) * R,
             BX + math.cos(a1) * R, 0.05, BZ + math.sin(a1) * R, 0.04, 6)
 
+
 write_obj(objects, "/home/ubuntu/repos/skategame/assets/bowl.obj", 2.0)

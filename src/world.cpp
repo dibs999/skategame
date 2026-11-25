@@ -403,7 +403,9 @@ void World::build(const TexSet& tex) {
         for (auto& kv : bowlStore) {
             Material mm = kv.first.rfind("concrete", 0) == 0
                 ? Material{tex.concreteBowl, 1.6f, {1,1,1}, 0.22f, 28.f, 1.f, 0.f, 0.f}
-                : Material{tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
+                : kv.first == "tile_band"
+                    ? Material{0, 1.f, {0.55f, 0.72f, 0.85f}, 0.35f, 40.f, 1.f, 0.2f, 0.f}
+                    : Material{tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
             items.push_back({&kv.second, Mat4(), mm, true});
         }
     }
