@@ -181,6 +181,20 @@ int main(int argc, char** argv) {
             // the wooden shell behind the skater
             float gy = game.world.supportHeight(desired.x, desired.z, 100.f);
             if (desired.y < gy + 0.4f) desired.y = gy + 0.4f;
+            // occlusion: march skater-head -> camera, clamp where terrain blocks
+            // the line of sight. Vertical lifting alone can't help when the
+            // camera swings behind a steep quarter wall — it ends up inside the
+            // wooden shell watching plywood for seconds.
+            Vec3 head = game.s.pos + Vec3(0, 1.35f, 0);
+            Vec3 ray = desired - head;
+            float tClear = 1.f;
+            for (int i = 1; i <= 12; i++) {
+                float t = i / 12.f;
+                Vec3 p = head + ray * t;
+                float g = game.world.supportHeight(p.x, p.z, 100.f);
+                if (p.y < g + 0.55f) { tClear = std::max((i - 1) / 12.f, 0.25f); break; }
+            }
+            if (tClear < 1.f) desired = head + ray * tClear;
             camPos = dampv(camPos, desired, 7.5f, frameDt);
             Vec3 look = game.s.pos + f * 1.6f + Vec3(0, 0.55f, 0);
             camTarget = dampv(camTarget, look, 10.f, frameDt);
