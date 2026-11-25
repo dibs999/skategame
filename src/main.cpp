@@ -180,7 +180,12 @@ int main(int argc, char** argv) {
             // high surfaces, or descending a steep ramp leaves the camera inside
             // the wooden shell behind the skater
             float gy = game.world.supportHeight(desired.x, desired.z, 100.f);
-            if (desired.y < gy + 0.4f) desired.y = gy + 0.4f;
+            // on steep transitions the surface rises toward the camera: clear it
+            // generously or the filmer cam ends up coplanar with the ramp wall,
+            // staring along plywood instead of over it
+            float rise = std::min(std::max(gy - game.s.pos.y, 0.f), 2.5f);
+            float margin = std::min(0.4f + rise * 0.18f, 1.1f);
+            if (desired.y < gy + margin) desired.y = gy + margin;
             // occlusion: march skater-head -> camera, clamp where terrain blocks
             // the line of sight. Vertical lifting alone can't help when the
             // camera swings behind a steep quarter wall — it ends up inside the
@@ -192,7 +197,7 @@ int main(int argc, char** argv) {
                 float t = i / 12.f;
                 Vec3 p = head + ray * t;
                 float g = game.world.supportHeight(p.x, p.z, 100.f);
-                if (p.y < g + 0.55f) { tClear = std::max((i - 1) / 12.f, 0.25f); break; }
+                if (p.y < g + 0.75f) { tClear = std::max((i - 1) / 12.f, 0.25f); break; }
             }
             if (tClear < 1.f) desired = head + ray * tClear;
             camPos = dampv(camPos, desired, 7.5f, frameDt);
