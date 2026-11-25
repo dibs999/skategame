@@ -221,7 +221,7 @@ void main(){
     if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ col = vec3(0.0); }
     else {
         // slight chromatic aberration toward the frame edge (lens feel)
-        vec2 ca = (uv - 0.5) * (0.0012 + r2 * 0.0035);
+        vec2 ca = (uv - 0.5) * (0.0005 + r2 * 0.0016);
         col.r = texture(uScene, uv + ca).r;
         col.g = texture(uScene, uv).g;
         col.b = texture(uScene, uv - ca).b;

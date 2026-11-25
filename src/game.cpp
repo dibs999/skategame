@@ -665,7 +665,7 @@ void Game::update(const Input& in, float dt) {
         }
         // flip animation
         if (s.flip != F_NONE && s.flipPhase < 1.f) {
-            s.flipPhase = std::min(1.f, s.flipPhase + dt * 2.4f);
+            s.flipPhase = std::min(1.f, s.flipPhase + dt * 1.85f);
             float ph = s.flipPhase * (1.6f - 0.6f * s.flipPhase); // ease
             switch (s.flip) {
             case F_KICK:    s.boardRoll = -ph * 6.283f; break;
