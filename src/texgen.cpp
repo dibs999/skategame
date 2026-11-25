@@ -4,6 +4,7 @@
 #include "math3d.h"
 #include <vector>
 #include <cmath>
+#include <unordered_map>
 
 static unsigned g_seed = 1;
 static float hash2(int x, int y) {
@@ -23,6 +24,7 @@ static float vnoise(float x, float y, float period) {
     return lerpf(lerpf(at(xi, yi), at(xi + 1, yi), sx),
                  lerpf(at(xi, yi + 1), at(xi + 1, yi + 1), sx), sy);
 }
+static GLuint genGraffiti(int w);
 static float fbm2(float x, float y, float period, int oct) {
     float v = 0, a = 0.5f, p = period;
     for (int i = 0; i < oct; i++) {
@@ -117,6 +119,34 @@ static GLuint genConcrete(int w, float basev, bool joints, bool wax) {
                     for (int c = 0; c < 3; c++) p[c] = (unsigned char)lerpf(p[c], 40.f, k);
                 }
             }
+        }
+    }
+    // oil/rust stains: irregular dark blotches that pool near joints
+    for (int st = 0; st < 7; st++) {
+        float cx = randf(seed), cy = randf(seed), r = 0.03f + randf(seed) * 0.08f;
+        float tone = 0.55f + randf(seed) * 0.2f;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                float u = x / (float)w - cx, v = y / (float)h - cy;
+                float d = std::sqrt(u * u + v * v) / r + (fbm2(u * 22 + 5, v * 22, 22, 3) - 0.5f) * 0.8f;
+                if (d < 1.f) {
+                    unsigned char* p = &img[(y * w + x) * 4];
+                    float k = (1.f - d) * 0.35f * tone;
+                    for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 88.f, k);
+                }
+            }
+    }
+    // hairline cracks: thin wandering dark polylines
+    for (int crk = 0; crk < 5; crk++) {
+        float x = randf(seed) * w, y = randf(seed) * h;
+        float ang = randf(seed) * 6.28f;
+        int segs = 20 + (int)(randf(seed) * 40);
+        for (int sgm = 0; sgm < segs; sgm++) {
+            ang += (fbm2(x * 0.05f, y * 0.05f, 8, 2) - 0.5f) * 1.4f;
+            x += std::cos(ang) * 2.2f; y += std::sin(ang) * 2.2f;
+            int px = ((int)x % w + w) % w, py = ((int)y % h + h) % h;
+            unsigned char* p = &img[(py * w + px) * 4];
+            for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 55.f, 0.4f);
         }
     }
     // scuffs and tire marks
@@ -323,6 +353,180 @@ static GLuint genCurbPaint(int w) {
     return finish(img, w, w);
 }
 
+static GLuint genBuilding(int w) {
+    // concrete frame + window grid: mostly dark glass, a few lit
+    auto img = base(w, w, 188, 184, 178);
+    int cols = 6, rows = 8;
+    unsigned seed = 9;
+    for (int ry = 0; ry < rows; ry++)
+        for (int cx = 0; cx < cols; cx++) {
+            int x0 = cx * w / cols + w / cols / 6, x1 = (cx + 1) * w / cols - w / cols / 6;
+            int y0 = ry * w / rows + w / rows / 5, y1 = (ry + 1) * w / rows - w / rows / 7;
+            float lit = hash2(cx * 3 + ry, ry * 7 + cx);
+            Vec3 glass = lit > 0.82f ? Vec3{252, 214, 150} : Vec3{52, 66, 84};
+            float tint = 0.8f + hash2(cx, ry) * 0.45f;
+            for (int y = y0; y < y1; y++)
+                for (int x = x0; x < x1; x++) {
+                    // sky reflection gradient: lighter toward top of each pane
+                    float g = glass.z * tint + (y - y0) / (float)(y1 - y0) * 26;
+                    unsigned char* p = &img[(y * w + x) * 4];
+                    p[0] = (unsigned char)clampf(glass.x * tint + (y - y0) * 0.4f, 0, 255);
+                    p[1] = (unsigned char)clampf(glass.y * tint + (y - y0) * 0.5f, 0, 255);
+                    p[2] = (unsigned char)clampf(g, 0, 255);
+                }
+        }
+    // grime streaks + slab lines between floors
+    strokes(img, w, w, 50, 120, 118, 112, 60, seed, 30, false);
+    for (int ry = 0; ry < rows; ry++)
+        for (int x = 0; x < w; x++) {
+            int y = ry * w / rows;
+            unsigned char* p = &img[(y * w + x) * 4];
+            for (int c = 0; c < 3; c++) p[c] = (unsigned char)(p[c] * 0.82f);
+        }
+    return finish(img, w, w);
+}
+
+static GLuint genWater(int w) {
+    auto img = base(w, w, 30, 88, 140);
+    // sun-glitter speckle + soft wave bands
+    for (int y = 0; y < w; y++)
+        for (int x = 0; x < w; x++) {
+            float v = fbm2(x * 0.045f, y * 0.045f, 31, 4);
+            float band = 0.5f + 0.5f * std::sin(y * 0.11f + v * 6.f);
+            unsigned char* p = &img[(y * w + x) * 4];
+            float l = 0.75f + v * 0.5f + band * 0.18f;
+            p[0] = (unsigned char)clampf(p[0] * l + band * 14, 0, 255);
+            p[1] = (unsigned char)clampf(p[1] * l + band * 18, 0, 255);
+            p[2] = (unsigned char)clampf(p[2] * l + band * 20, 0, 255);
+        }
+    unsigned seed = 77;
+    speckle(img, w, w, 700, 220, 235, 245, 255, seed);
+    return finish(img, w, w);
+}
+
+
+// rasterize stroke-font tags into a texture: real letterforms instead of blobs
+static void tagText(std::vector<unsigned char>& img, int w, float x0, float y0,
+                    float sc, const char* word, int r, int g, int b) {
+    static const std::unordered_map<char, std::string> G = {
+        {'A', "0620|2046|1434"}, {'C', "4000|0006|0646"}, {'E', "4000|0006|0646|0333"},
+        {'K', "0006|4003|0346"}, {'P', "0600|0030|3041|4123|2303"}, {'R', "0600|0030|3041|4123|2303|2346"},
+        {'S', "4010|1001|0102|0213|1333|3344|4445|4536|3606"}, {'T', "0040|2026"},
+        {'8', "1030|4003|4346|1636|0306|0003|1333"}, {'V', "0026|2640"}, {'O', "1030|3041|4145|4536|3516|1505|0501|0110"},
+        {'N', "0600|0046|4640"}, {'I', "0040|2026|0646"}, {'L', "0006|0646"}
+    };
+    auto dot = [&](int px, int py, int cr, int cg, int cb, float k, int th) {
+        for (int dy = -th; dy <= th; dy++)
+            for (int dx = -th; dx <= th; dx++) {
+                int qx = px + dx, qy = py + dy;
+                if (qx < 0 || qy < 0 || qx >= w || qy >= w) continue;
+                if (dx * dx + dy * dy > th * th + 1) continue;
+                unsigned char* p = &img[(qy * w + qx) * 4];
+                for (int c2 = 0; c2 < 3; c2++)
+                    p[c2] = (unsigned char)lerpf(p[c2], (float)(c2 == 0 ? cr : c2 == 1 ? cg : cb), k);
+            }
+    };
+    float cx = x0;
+    for (const char* wp = word; *wp; wp++) {
+        auto it = G.find(*wp);
+        if (it == G.end()) { cx += sc * 5.f; continue; }
+        // pass 1: thick dark outline; pass 2: thinner bright fill
+        for (int pass = 0; pass < 2; pass++) {
+            int th = pass == 0 ? 3 : 1;
+            int cr = pass == 0 ? 20 : r, cg = pass == 0 ? 16 : g, cb = pass == 0 ? 20 : b;
+            float k = pass == 0 ? 0.8f : 0.95f;
+            size_t st = 0;
+            std::string s = it->second;
+            while (st < s.size()) {
+                size_t bar = s.find('|', st);
+                std::string seg = s.substr(st, bar == std::string::npos ? bar : bar - st);
+                if (seg.size() >= 4) {
+                    float xa = cx + (seg[0] - '0') * sc, ya = y0 + (seg[1] - '0') * sc;
+                    float xb = cx + (seg[2] - '0') * sc, yb = y0 + (seg[3] - '0') * sc;
+                    int steps = (int)(std::hypot(xb - xa, yb - ya) * 1.5f) + 1;
+                    for (int i = 0; i <= steps; i++) {
+                        float t = i / (float)steps;
+                        dot((int)(xa + (xb - xa) * t), (int)(ya + (yb - ya) * t), cr, cg, cb, k, th);
+                    }
+                }
+                if (bar == std::string::npos) break;
+                st = bar + 1;
+            }
+        }
+        cx += sc * 5.2f;
+    }
+}
+
+static GLuint genGraffiti(int w) {
+    // weathered concrete base + layered spray-paint bubbles, arcs and drips
+    auto img = base(w, w, 152, 148, 142);
+    for (int y = 0; y < w; y++)
+        for (int x = 0; x < w; x++) {
+            float u = x / (float)w, v = y / (float)w;
+            float n = fbm2(u * 20, v * 20, 20, 4) - 0.5f;
+            unsigned char* p = &img[(y * w + x) * 4];
+            float tt = 1.f + n * 0.22f;
+            for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)clampf(p[cc] * tt, 0, 255);
+        }
+    unsigned seed = 77;
+    static const unsigned char COLS[6][3] = {
+        {232, 44, 120}, {40, 190, 232}, {250, 158, 30}, {120, 220, 60}, {168, 84, 240}, {250, 240, 60}};
+    // big overlapping spray bubbles with dark outlines, like throw-up letters
+    for (int b = 0; b < 9; b++) {
+        // letters sit in loose rows on a shared baseline, overlapping like a throw-up
+        float row = b < 5 ? 0.34f : 0.62f;
+        float cx = 0.12f + (b % 5) * 0.16f + randf(seed) * 0.05f;
+        float cy = row + (randf(seed) - 0.5f) * 0.05f;
+        float rx = 0.07f + randf(seed) * 0.06f, ry = rx * (0.9f + randf(seed) * 0.5f);
+        int col = (int)(randf(seed) * 6) % 6;
+        for (int y = 0; y < w; y++)
+            for (int x = 0; x < w; x++) {
+                float u = x / (float)w - cx, v = (y / (float)w - cy) * 1.0f;
+                float d = (u * u) / (rx * rx) + (v * v) / (ry * ry);
+                if (d > 1.3f) continue;
+                unsigned char* p = &img[(y * w + x) * 4];
+                if (d > 1.0f) { // outline
+                    for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)(p[cc] * 0.35f);
+                } else {
+                    float edge = clampf((1.f - d) * 3.f, 0.f, 1.f);   // soft spray edge
+                    float spk = 0.85f + 0.3f * fbm2(x * 0.2f, y * 0.2f, 16, 2);
+                    for (int cc = 0; cc < 3; cc++)
+                        p[cc] = (unsigned char)lerpf(p[cc], clampf(COLS[col][cc] * spk, 0, 255), edge * 0.9f);
+                }
+            }
+        // paint drips below the blob
+        int nd = 2 + (int)(randf(seed) * 3);
+        for (int dr = 0; dr < nd; dr++) {
+            int dx = (int)((cx - rx * 0.5f + randf(seed) * rx) * w);
+            int sy = (int)((cy + ry * 0.7f) * w);
+            int len = 6 + (int)(randf(seed) * 26);
+            for (int s = 0; s < len && sy + s < w; s++) {
+                unsigned char* p = &img[((sy + s) * w + dx) * 4];
+                float k = 0.55f * (1.f - s / (float)len);
+                for (int cc = 0; cc < 3; cc++)
+                    p[cc] = (unsigned char)lerpf(p[cc], (float)COLS[col][cc], k);
+            }
+        }
+    }
+    // white highlight streaks on top of letters
+    strokes(img, w, w, 22, 255, 255, 255, 90, seed, 30, true);
+    // grime re-weathering so it sits into the wall
+    for (int y = 0; y < w; y++)
+        for (int x = 0; x < w; x++) {
+            float g = fbm2(x / (float)w * 7, y / (float)w * 7, 7, 4);
+            if (g > 0.62f) {
+                unsigned char* p = &img[(y * w + x) * 4];
+                float k = (g - 0.62f) * 0.9f;
+                for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 105, k);
+            }
+        }
+    // stylized throw-up tags in real letterforms over the bubbles
+    tagText(img, w, w * 0.07f, w * 0.16f, w * 0.028f, "SK8", 250, 240, 60);
+    tagText(img, w, w * 0.42f, w * 0.52f, w * 0.024f, "PORT", 40, 190, 232);
+    tagText(img, w, w * 0.10f, w * 0.68f, w * 0.020f, "CARVERTON", 232, 44, 120);
+    return finish(img, w, w);
+}
+
 void generateAllTextures(TexSet& t) {
     g_seed = 12345;
     t.concrete = genConcrete(512, 165, true, true);
@@ -338,4 +542,8 @@ void generateAllTextures(TexSet& t) {
     t.bark = genBark(128);
     t.leaf = genLeaf(256);
     t.curbPaint = genCurbPaint(256);
+    t.building = genBuilding(256);
+
+    t.water = genWater(256);
+    t.graffiti = genGraffiti(256);
 }
