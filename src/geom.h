@@ -47,7 +47,7 @@ struct MeshBuilder {
         }
     }
 
-    void cylinder(const Vec3& a, const Vec3& b, float r, int seg = 12, bool caps = true) {
+    void cylinder(const Vec3& a, const Vec3& b, float r, int seg = 18, bool caps = true) {
         Vec3 ax = (b - a).normalized();
         Vec3 t = (std::abs(ax.y) < 0.9f) ? ax.cross({0,1,0}).normalized()
                                        : ax.cross({1,0,0}).normalized();
@@ -79,7 +79,7 @@ struct MeshBuilder {
         }
     }
 
-    void sphere(const Vec3& c, float r, int seg = 12, int rings = 8) {
+    void sphere(const Vec3& c, float r, int seg = 20, int rings = 14) {
         unsigned b0 = (unsigned)v.size();
         for (int j = 0; j <= rings; j++) {
             float ph = j / (float)rings * 3.14159265f;
@@ -96,7 +96,7 @@ struct MeshBuilder {
             }
     }
 
-    void capsule(const Vec3& a, const Vec3& b, float r, int seg = 10) {
+    void capsule(const Vec3& a, const Vec3& b, float r, int seg = 18) {
         cylinder(a, b, r, seg, false);
         sphere(a, r, seg, 6);
         sphere(b, r, seg, 6);
@@ -105,10 +105,10 @@ struct MeshBuilder {
     // Quarter-pipe transition: arc of radius R starting at (ox, oy) rising along +dir,
     // spanning width w along the other axis. 'segs' subdivisions.
     void quarterPipe(const Vec3& org, const Vec3& dir, float width, float R,
-                     int segs = 14, bool vertWall = true) {
+                     int segs = 14, bool vertWall = true, float arc = -1.f) {
         Vec3 side = dir.cross({0,1,0}).normalized() * -1.f; // perpendicular, horizontal
         Vec3 prev[2];
-        float arcEnd = vertWall ? 1.5707f : 1.35f;
+        float arcEnd = arc > 0 ? arc : (vertWall ? 1.5707f : 1.35f);
         for (int i = 0; i <= segs; i++) {
             float t = i / (float)segs * arcEnd;
             Vec3 p = org + dir * (R * std::sin(t)) + Vec3(0, R - R * std::cos(t), 0);
