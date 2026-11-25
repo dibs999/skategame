@@ -1001,6 +1001,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     // torso + head + cap
     if (hasSkaterMesh) {
         out.push_back({&skaterParts.at("torso"), partXform(neck, hipPos + Vec3(0, 0.05f, 0), f, 0.42f), shirt});
+        out.push_back({&skaterParts.at("neck"), partXform(neck + Vec3(0, 0.09f, 0), neck - Vec3(0, 0.02f, 0), f, 0.12f), skin});
         out.push_back({&skaterParts.at("head"), partXform(head + Vec3(0, 0.11f, 0), head - Vec3(0, 0.10f, 0), f, 0.22f), skin});
     } else {
         out.push_back({&mCapsule, capsuleXform(hipPos + Vec3(0, 0.05f, 0), neck, 0.125f), shirt});

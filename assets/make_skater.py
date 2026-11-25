@@ -63,6 +63,10 @@ jaw = ball((0.062, 0.055, 0.066), seg=16, rings=12)
 shift(jaw, 0, -0.095, 0.018)
 joinpart("head", [cran, jaw])
 
+# ---- neck ----
+neck = cone(0.045, 0.05, 0.09, seg=16)
+joinpart("neck", [neck])
+
 # ---- cap: dome + forward brim ----
 dome = ball((0.088, 0.055, 0.092), seg=20, rings=12)
 brim = ball((0.055, 0.012, 0.06), seg=14, rings=8)
