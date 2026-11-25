@@ -93,7 +93,7 @@ struct HUD {
         if (s.state == S_AIR && s.airTime > 0.45f) {
             snprintf(buf, sizeof buf, "AIR %.1f", s.airTime);
             float aw = font.textWidth(buf, 2.4f * u);
-            text(buf, W - 20 * u - aw, H - 80 * u, 2.4f * u, white);
+            text(buf, W - 20 * u - aw, H - 96 * u, 2.4f * u, white);
         }
         // balance meter while grinding / manualing
         if (s.state == S_GRIND || s.state == S_MANUAL) {
@@ -127,14 +127,17 @@ struct HUD {
             snprintf(buf, sizeof buf, "BEST %d", s.bestScore);
             text(buf, W - 18 * u - font.textWidth(buf, 2.0f * u), 62 * u, 2.0f * u, dim);
         }
-        // controls hint first seconds (always small bottom-center)
+        // controls hint first seconds — adaptive scale so it never clips the frame
         const char* hint = "W PUSH  A/D CARVE  CTRL OLLIE  ARROWS TRICKS  SPC BONELESS  Q/E/F/G GRAB  R/V MANUAL";
         const char* hint2 = "M/T MARKER  1-5 SPOTS  O RUN  N DUSK  BKSP RESET";
-        // hints fade out once the player has had time to learn them
         float hintA = 0.55f * clampf((30.f - g.now) / 8.f, 0.f, 1.f);
         if (hintA > 0.01f) {
-            text(hint, W / 2 - font.textWidth(hint, 2.0f * u) / 2, H - 40 * u, 2.0f * u, dim, hintA);
-            text(hint2, W / 2 - font.textWidth(hint2, 2.0f * u) / 2, H - 20 * u, 2.0f * u, dim, hintA);
+            float hs = 2.0f * u;
+            float hw = font.textWidth(hint, hs);
+            if (hw > W * 0.86f) { hs *= W * 0.86f / hw; hw = font.textWidth(hint, hs); }
+            text(hint, W / 2 - hw / 2, H - 34 * u, hs, dim, hintA);
+            float hw2 = font.textWidth(hint2, hs);
+            text(hint2, W / 2 - hw2 / 2, H - 17 * u, hs, dim, hintA);
         }
     }
 };
