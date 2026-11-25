@@ -1041,8 +1041,13 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         float outAmt = 0.22f + std::abs(s.lean) * 0.35f +
                        (air ? 0.16f + std::min(std::abs(s.spinAmt) * 0.1f, 0.15f) : 0.f) +
                        (s.state == S_GRIND ? 0.15f : 0) + (s.state == S_MANUAL ? 0.22f : 0);
-        handL = shoL + (rgt * -outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.02f + swing);
-        handR = shoR + (rgt * outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.0f - swing);
+        // asymmetric counter-rotation: skaters wind the trailing arm back and the
+        // leading arm forward — the symmetric scarecrow pose was the mannequin tell
+        float lean = clampf(s.lean, -1.f, 1.f);
+        handL = shoL + (rgt * -outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.02f + swing - lean * 0.16f);
+        handR = shoR + (rgt * outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.0f - swing + lean * 0.10f);
+        handL.y += lean * 0.05f;
+        handR.y -= lean * 0.03f;
         if (s.state == S_GRIND) {
             float wb = s.balance * 0.35f;
             handL = handL + Vec3(0, wb, 0) + f * 0.12f;
