@@ -586,8 +586,22 @@ void World::build(const TexSet& tex) {
         pb.box({-10, 0.07f, -8.3f}, {20, 0.07f, 0.3f});
         cx.add(pb, {tex.curbPaint, 0.6f, {1,1,1}, 0.3f, 40.f, 1.f, 0.05f, 0.f});
     }
+    // trees — Blender asset when present
+    std::map<std::string, Mesh> treeParts;
+    bool hasTrees = loadObjParts("assets/trees.obj", treeParts) ||
+                    loadObjParts("../assets/trees.obj", treeParts);
+    static std::map<std::string, Mesh> treeStore;
+    if (hasTrees) treeStore = std::move(treeParts);
+    if (hasTrees) {
+        for (auto& kv : treeStore) {
+            Material mm = kv.first.rfind("bark", 0) == 0
+                ? Material{tex.bark, 1.f, {1,1,1}, 0.1f, 16.f, 1.f, 0.f, 0.f}
+                : Material{tex.leaf, 1.f, {1,1,1}, 0.15f, 20.f, 1.f, 0.f, 0.f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
+    }
     // trees
-    {
+    if (!hasTrees) {
         auto& tr = cx.mb();
         tr.setColor({1, 1, 1});
         for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
