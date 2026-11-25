@@ -305,6 +305,7 @@ void World::build(const TexSet& tex) {
     cx.ledgeEdges(-49, -9, -47, -7.6f, 0.8f);
     cx.ledgeEdges(19, 35.4f, 21, 36.8f, 0.8f);
     edges.push_back({{-19, 0.55f, 6}, {-13, 0.55f, 6}, true});             // flatbar
+    edges.push_back({{2, 0.55f, -14}, {2, 0.55f, -8}, true});              // north flatbar
     edges.push_back({{-46, 0.55f, 28}, {-40, 0.55f, 28}, true});           // lot rail
     addHF(-26, -14, -22, -10, 1, 0.f, 0.8f);                               // kicker ramp
     // mini ramp coping (grindable lips)
@@ -416,6 +417,10 @@ void World::build(const TexSet& tex) {
         m.cylinder({-19, 0, 6}, {-19, 0.55f, 6}, 0.03f, 8);
         m.cylinder({-13, 0, 6}, {-13, 0.55f, 6}, 0.03f, 8);
         m.cylinder({-16, 0, 6}, {-16, 0.55f, 6}, 0.03f, 8);
+        m.cylinder({2, 0.55f, -14}, {2, 0.55f, -8}, 0.04f, 12);
+        m.cylinder({2, 0, -14}, {2, 0.55f, -14}, 0.03f, 8);
+        m.cylinder({2, 0, -8}, {2, 0.55f, -8}, 0.03f, 8);
+        m.cylinder({2, 0, -11}, {2, 0.55f, -11}, 0.03f, 8);
         m.cylinder({-46, 0.55f, 28}, {-40, 0.55f, 28}, 0.04f, 12);
         m.cylinder({-46, 0, 28}, {-46, 0.55f, 28}, 0.03f, 8);
         m.cylinder({-40, 0, 28}, {-40, 0.55f, 28}, 0.03f, 8);
