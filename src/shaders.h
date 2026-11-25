@@ -50,6 +50,7 @@ uniform float uAO;
 uniform float uMetal;
 uniform float uEmissive;
 uniform float uUseTex;
+uniform vec3 uTint;
 out vec4 fragColor;
 
 float shadowPCF(vec4 sc){
@@ -60,14 +61,14 @@ float shadowPCF(vec4 sc){
     vec2 ts = vec2(1.0/2048.0);
     for(int x=-1;x<=1;x++)
     for(int y=-1;y<=1;y++){
-        float d = texture(uShadowMap, p.xy + vec2(x,y)*ts).r;
+        float d = texture(uShadowMap, p.xy + vec2(x,y)*ts*1.6).r;
         sum += (p.z - bias) > d ? 0.0 : 1.0;
     }
     return sum / 9.0;
 }
 
 void main(){
-    vec3 base = vColor.rgb;
+    vec3 base = vColor.rgb * uTint;
     if(uUseTex > 0.5) base *= texture(uTex, vUV).rgb;
     vec3 N = normalize(vNormal);
     vec3 L = normalize(uSunDir);
@@ -82,7 +83,7 @@ void main(){
     vec3 R = reflect(-V, N);
     float fres = pow(1.0 - max(dot(N,V),0.0), 3.0);
     vec3 env = mix(vec3(0.55,0.62,0.70), vec3(0.85,0.90,1.0), R.y*0.5+0.5);
-    vec3 col = base * (amb * uAO + uSunColor * ndl * sh)
+    vec3 col = base * (amb * uAO * vColor.a + uSunColor * ndl * sh * (0.55 + 0.45 * vColor.a))
              + uSunColor * spec
              + env * fres * uMetal * (0.35 + 0.65*sh)
              + base * uEmissive;
@@ -123,6 +124,7 @@ static const char* SKY_FS = R"(
 in vec3 vDir;
 uniform vec3 uSunDir;
 uniform float uTime;
+uniform float uDusk;
 out vec4 fragColor;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p){
@@ -140,25 +142,25 @@ void main(){
     vec3 d = normalize(vDir);
     float h = d.y;
     // sky gradient: bright hazy horizon -> deep blue zenith
-    vec3 zen = vec3(0.16,0.38,0.78);
-    vec3 hor = vec3(0.75,0.85,0.95);
+    vec3 zen = mix(vec3(0.16,0.38,0.78), vec3(0.10,0.10,0.30), uDusk);
+    vec3 hor = mix(vec3(0.75,0.85,0.95), vec3(0.95,0.45,0.22), uDusk);
     vec3 col = mix(hor, zen, pow(clamp(h*1.4+0.15,0.0,1.0),0.7));
     // sun disc + glare halo
     float sd = dot(d, normalize(uSunDir));
-    col += vec3(1.0,0.95,0.80) * pow(max(sd,0.0), 1200.0) * 8.0;   // disc
-    col += vec3(1.0,0.92,0.70) * pow(max(sd,0.0), 180.0) * 0.9;    // corona
-    col += vec3(1.0,0.90,0.65) * pow(max(sd,0.0), 8.0) * 0.22;     // broad haze
+    col += mix(vec3(1.0,0.95,0.80), vec3(1.0,0.55,0.25), uDusk) * pow(max(sd,0.0), 1200.0) * 8.0;
+    col += mix(vec3(1.0,0.92,0.70), vec3(1.0,0.50,0.22), uDusk) * pow(max(sd,0.0), 180.0) * (0.9 + 1.4*uDusk);
+    col += mix(vec3(1.0,0.90,0.65), vec3(0.9,0.45,0.25), uDusk) * pow(max(sd,0.0), 8.0) * (0.22 + 0.4*uDusk);
     // clouds: only above horizon
     if(h > 0.01){
         vec2 cuv = d.xz / (h + 0.18);
         float cl = fbm(cuv*1.6 + vec2(uTime*0.006, uTime*0.002));
         float cm = smoothstep(0.55, 0.8, cl) * smoothstep(0.0, 0.25, h);
-        col = mix(col, vec3(1.0,1.0,1.0), cm*0.75);
+        col = mix(col, mix(vec3(1.0), vec3(1.0,0.55,0.40), uDusk), cm*(0.75 - 0.2*uDusk));
         float wisp = fbm(cuv*4.0 - vec2(uTime*0.01, 0.0));
-        col += vec3(1.0) * smoothstep(0.7,0.95,wisp) * 0.06;
+        col += mix(vec3(1.0), vec3(0.9,0.5,0.35), uDusk) * smoothstep(0.7,0.95,wisp) * 0.06;
     }
     // horizon warm tint opposite sun
-    col = mix(col, vec3(0.85,0.78,0.70), pow(1.0-abs(h),8.0)*0.35);
+    col = mix(col, mix(vec3(0.85,0.78,0.70), vec3(0.65,0.30,0.28), uDusk), pow(1.0-abs(h),8.0)*0.35);
     fragColor = vec4(col,1.0);
 }
 )";
@@ -208,6 +210,7 @@ uniform float uDistort;   // barrel distortion strength (fisheye feel)
 uniform float uVignette;
 uniform float uExposure;
 uniform float uFlash;     // bail/impact white flash
+uniform float uTime;
 out vec4 fragColor;
 void main(){
     vec2 uv = vUV*2.0-1.0;
@@ -216,13 +219,52 @@ void main(){
     uv = uv*0.5+0.5;
     vec3 col;
     if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ col = vec3(0.0); }
-    else col = texture(uScene, uv).rgb + texture(uBloom, uv).rgb*uBloomAmt;
+    else {
+        // FXAA: edge-directed smoothing — the aliasing crawl on rails/ledges was
+        // the single biggest cheapness tell, and MSAA costs 4x fill in software GL
+        vec2 px = 1.0 / vec2(textureSize(uScene, 0));
+        vec3 rgbNW = texture(uScene, uv + vec2(-1.0,-1.0)*px).rgb;
+        vec3 rgbNE = texture(uScene, uv + vec2( 1.0,-1.0)*px).rgb;
+        vec3 rgbSW = texture(uScene, uv + vec2(-1.0, 1.0)*px).rgb;
+        vec3 rgbSE = texture(uScene, uv + vec2( 1.0, 1.0)*px).rgb;
+        vec3 rgbM  = texture(uScene, uv).rgb;
+        vec3 luma = vec3(0.299, 0.587, 0.114);
+        float lNW = dot(rgbNW, luma), lNE = dot(rgbNE, luma);
+        float lSW = dot(rgbSW, luma), lSE = dot(rgbSE, luma);
+        float lM = dot(rgbM, luma);
+        float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+        float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+        vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
+        float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
+        float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+        dir = clamp(dir * rcpDirMin, -8.0, 8.0) * px;
+        vec3 rgbA = 0.5 * (texture(uScene, uv + dir * (1.0/3.0 - 0.5)).rgb +
+                           texture(uScene, uv + dir * (2.0/3.0 - 0.5)).rgb);
+        vec3 rgbB = rgbA * 0.5 + 0.25 * (texture(uScene, uv + dir * -0.5).rgb +
+                                         texture(uScene, uv + dir *  0.5).rgb);
+        float lB = dot(rgbB, luma);
+        col = (lB < lMin || lB > lMax) ? rgbA : rgbB;
+        // slight chromatic aberration toward the frame edge (lens feel)
+        vec2 ca = (uv - 0.5) * (0.0005 + r2 * 0.0016);
+        col.r = mix(col.r, texture(uScene, uv + ca).r, 0.6);
+        col.b = mix(col.b, texture(uScene, uv - ca).b, 0.6);
+        col += texture(uBloom, uv).rgb * uBloomAmt;
+    }
     // filmic-ish tonemap
     col = vec3(1.0) - exp(-col * uExposure);
     col = pow(col, vec3(0.85));
+    // skate-video grade: contrast curve, saturation, slight warmth
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, 1.18);
+    col = mix(col, col * col * (3.0 - 2.0 * col), 0.35);
+    col *= vec3(1.02, 1.0, 0.97);
     // vignette
     float vg = 1.0 - uVignette*smoothstep(0.3, 1.6, r2);
     col *= vg;
+    // subtle film grain (skate-video feel)
+    float gn = fract(sin(dot(uv * vec2(1187.3, 993.1) + mod(uTime, 100.0) * 77.7,
+                             vec2(12.9898, 78.233))) * 43758.5453);
+    col += (gn - 0.5) * 0.028;
     col += vec3(uFlash);
     fragColor = vec4(col,1.0);
 }
@@ -269,28 +311,5 @@ void main(){
     if(r2 > 1.0) discard;
     float a = (1.0-r2) * vColor.a;
     fragColor = vec4(vColor.rgb, a);
-}
-)";
-
-// Unlit textured quad (session marker flag etc.)
-static const char* UNLIT_FS = R"(
-#version 330 core
-in vec3 vWorld;
-in vec3 vNormal;
-in vec2 vUV;
-in vec4 vColor;
-in vec4 vShadow;
-uniform sampler2D uTex;
-uniform vec3 uCamPos;
-uniform vec3 uFogColor;
-uniform float uFogDensity;
-uniform float uUseTex;
-out vec4 fragColor;
-void main(){
-    vec3 col = vColor.rgb;
-    if(uUseTex > 0.5) col *= texture(uTex, vUV).rgb;
-    float dist = length(uCamPos - vWorld);
-    float fog = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist);
-    fragColor = vec4(mix(col,uFogColor,fog), vColor.a);
 }
 )";
