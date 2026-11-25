@@ -21,3 +21,5 @@ add_executable(skategame
 target_include_directories(skategame PRIVATE ${SDL2_INCLUDE_DIRS} ${GLEW_INCLUDE_DIRS})
 target_link_libraries(skategame PRIVATE ${SDL2_LIBRARIES} GLEW::GLEW OpenGL::GL)
 target_compile_options(skategame PRIVATE -O2 -Wall)
+
+file(COPY ${CMAKE_SOURCE_DIR}/assets DESTINATION ${CMAKE_BINARY_DIR})
