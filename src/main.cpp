@@ -273,8 +273,8 @@ int main(int argc, char** argv) {
         lit.setVec3("uCamPos", camFinal);
         lit.setVec3("uAmbientTop", dusk ? Vec3(0.16f, 0.15f, 0.30f) : Vec3(0.26f, 0.33f, 0.45f));
         lit.setVec3("uAmbientBottom", dusk ? Vec3(0.15f, 0.11f, 0.10f) : Vec3(0.20f, 0.18f, 0.16f));
-        lit.setVec3("uFogColor", dusk ? Vec3(0.82f, 0.52f, 0.38f) : Vec3(0.72f, 0.80f, 0.90f));
-        lit.setF("uFogDensity", dusk ? 0.006f : 0.0045f);
+        lit.setVec3("uFogColor", dusk ? Vec3(0.82f, 0.52f, 0.38f) : Vec3(0.78f, 0.85f, 0.94f));
+        lit.setF("uFogDensity", dusk ? 0.007f : 0.0062f);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, shadowFbo.tex);
         lit.setI("uShadowMap", 1);

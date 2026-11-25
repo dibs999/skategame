@@ -777,7 +777,14 @@ void World::build(const TexSet& tex) {
         MeshBuilder groups[3];
         for (int i = 0; i < 3; i++) groups[i].setColor({1, 1, 1});
         auto addTower = [&](float bx, float bz, float bh, float bs, int grp) {
-            groups[grp].box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+            // stepped silhouette: base slab, setback mid, slim crown + rooftop cap —
+            // real skylines read as stacked masses, not single cuboids
+            float h1 = bh * 0.45f, h2 = bh * 0.8f;
+            float s1 = bs, s2 = bs * 0.82f, s3 = bs * 0.62f;
+            groups[grp].box({bx, h1 / 2, bz}, {s1 / 2, h1 / 2, s1 / 2});
+            groups[grp].box({bx, h1 + (h2 - h1) / 2, bz}, {s2 / 2, (h2 - h1) / 2, s2 / 2});
+            groups[grp].box({bx, h2 + (bh - h2) / 2, bz}, {s3 / 2, (bh - h2) / 2, s3 / 2});
+            groups[grp].box({bx, bh + 0.35f, bz}, {s3 * 0.3f, 0.35f, s3 * 0.3f});  // penthouse cap
         };
         for (int i = 0; i < 14; i++) {
             float bx = -80 + randf(sd) * 200, bz = -80 - randf(sd) * 40;
