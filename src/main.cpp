@@ -269,7 +269,7 @@ int main(int argc, char** argv) {
         // lit scene
         lit.use();
         lit.setVec3("uSunDir", sunDir);
-        lit.setVec3("uSunColor", dusk ? Vec3(1.8f, 0.95f, 0.5f) : Vec3(1.55f, 1.42f, 1.15f));
+        lit.setVec3("uSunColor", dusk ? Vec3(1.8f, 0.95f, 0.5f) : Vec3(1.58f, 1.40f, 1.02f));
         lit.setVec3("uCamPos", camFinal);
         lit.setVec3("uAmbientTop", dusk ? Vec3(0.16f, 0.15f, 0.30f) : Vec3(0.26f, 0.33f, 0.45f));
         lit.setVec3("uAmbientBottom", dusk ? Vec3(0.15f, 0.11f, 0.10f) : Vec3(0.20f, 0.18f, 0.16f));
