@@ -471,6 +471,20 @@ void World::build(const TexSet& tex) {
         m.cylinder({-43, 0, 28}, {-43, 0.55f, 28}, 0.03f, 8);
         cx.add(m, {tex.metal, 1.f, {0.92f,0.93f,0.96f}, 1.0f, 128.f, 1.f, 0.9f, 0.f});
     }
+    // benches — Blender asset when present
+    std::map<std::string, Mesh> benchParts;
+    bool hasBench = loadObjParts("assets/bench.obj", benchParts) ||
+                    loadObjParts("../assets/bench.obj", benchParts);
+    static std::map<std::string, Mesh> benchStore;
+    if (hasBench) benchStore = std::move(benchParts);
+    if (hasBench) {
+        for (auto& kv : benchStore) {
+            Material mm = kv.first.rfind("wood", 0) == 0
+                ? Material{tex.wood, 0.6f, {1,1,1}, 0.25f, 40.f, 1.f, 0.f, 0.f}
+                : Material{tex.metal, 1.f, {0.3f, 0.32f, 0.35f}, 0.6f, 70.f, 1.f, 0.4f, 0.f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
+    }
     // ledges, benches, funbox top, planters (concrete)
     {
         auto& m = cx.mb();
@@ -478,8 +492,10 @@ void World::build(const TexSet& tex) {
         m.box({-2.25f, 0.225f, -3.1f}, {2.25f, 0.225f, 0.9f});
         m.box({33.75f, 0.25f, 6.85f}, {2.75f, 0.25f, 0.85f});
         m.box({-2, 0.45f, 14}, {2, 0.45f, 2});
-        m.box({-20.1f, 0.21f, 20}, {1.1f, 0.21f, 0.4f});
-        m.box({8.1f, 0.21f, 30}, {1.1f, 0.21f, 0.4f});
+        if (!hasBench) {
+            m.box({-20.1f, 0.21f, 20}, {1.1f, 0.21f, 0.4f});
+            m.box({8.1f, 0.21f, 30}, {1.1f, 0.21f, 0.4f});
+        }
         // manual pads: low wide platforms filling the empty midfield
         m.box({-16, 0.12f, -14}, {2.6f, 0.12f, 1.2f});
         m.box({14, 0.12f, -24}, {2.6f, 0.12f, 1.2f});
@@ -936,7 +952,8 @@ void World::build(const TexSet& tex) {
         gq.setColor({1, 1, 1});
         // quad centered at ct, spanning w x h, in the plane perpendicular to n
         auto decal = [&](const Vec3& ct, float wdt, float hgt, const Vec3& n) {
-            Vec3 t = (std::abs(n.y) < 0.9f ? n.cross(Vec3(0,1,0)) : n.cross(Vec3(1,0,0))).normalized();
+            // u must run along the viewer's right (-n x up) or every tag reads mirrored
+            Vec3 t = (std::abs(n.y) < 0.9f ? Vec3(0,1,0).cross(n) : Vec3(1,0,0).cross(n)).normalized();
             Vec3 b = n.cross(t).normalized();
             Vec3 p0 = ct - t * (wdt/2) - b * (hgt/2), p1 = ct + t * (wdt/2) - b * (hgt/2);
             Vec3 p2 = ct + t * (wdt/2) + b * (hgt/2), p3 = ct - t * (wdt/2) + b * (hgt/2);
