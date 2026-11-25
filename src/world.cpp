@@ -440,8 +440,9 @@ void World::build(const TexSet& tex) {
     if (hasStairs) {
         for (auto& kv : stairStore) {
             Material mm{tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f};
-            if (kv.first == "paint_hubba") mm = Material{tex.curbPaint, 0.6f, {1,1,1}, 0.3f, 40.f, 1.f, 0.05f, 0.f};
-            else if (kv.first == "metal_rail") mm = Material{tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
+            // concrete-tinted hubbas + darker steel: raw white read as PVC plastic
+            if (kv.first == "paint_hubba") mm = Material{tex.concrete, 0.6f, {0.72f, 0.68f, 0.62f}, 0.18f, 22.f, 1.f, 0.f, 0.f};
+            else if (kv.first == "metal_rail") mm = Material{tex.metal, 1.f, {0.55f,0.58f,0.62f}, 0.8f, 90.f, 1.f, 0.7f, 0.f};
             else if (kv.first == "concrete_nosing") mm.color = {0.7f, 0.7f, 0.68f};
             items.push_back({&kv.second, Mat4(), mm, true});
         }
