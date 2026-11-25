@@ -83,16 +83,22 @@ static std::vector<unsigned char> base(int w, int h, float r, float g, float b) 
 }
 
 static GLuint genConcrete(int w, float basev, bool joints, bool wax) {
-    auto img = base(w, w, basev, basev, basev - 4);
+    auto img = base(w, w, basev, basev - 2, basev - 10);   // slightly warm-grey
     int h = w;
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             float u = x / (float)w, v = y / (float)h;
             float n = fbm2(u * 8, v * 8, 8, 5) - 0.5f;         // big blotches
             float n2 = fbm2(u * 32, v * 32, 32, 4) - 0.5f;     // fine grain
-            float t = 1.f + n * 0.22f + n2 * 0.10f;
+            float n3 = fbm2(u * 3.3f, v * 3.3f, 3.3f, 3) - 0.5f;  // large-scale dirt patches
+            float t = 1.f + n * 0.26f + n2 * 0.12f + n3 * 0.30f;
             unsigned char* p = &img[(y * w + x) * 4];
             for (int c = 0; c < 3; c++) p[c] = (unsigned char)clampf(p[c] * t, 0, 255);
+            // grime darkens with a warm-brown cast
+            float grime = clampf(-n3 * 1.3f, 0.f, 0.5f);
+            p[0] = (unsigned char)lerpf(p[0], 92.f, grime * 0.5f);
+            p[1] = (unsigned char)lerpf(p[1], 82.f, grime * 0.55f);
+            p[2] = (unsigned char)lerpf(p[2], 70.f, grime * 0.6f);
         }
     unsigned seed = 7;
     if (joints) {
@@ -529,9 +535,9 @@ static GLuint genGraffiti(int w) {
 
 void generateAllTextures(TexSet& t) {
     g_seed = 12345;
-    t.concrete = genConcrete(512, 165, true, true);
+    t.concrete = genConcrete(512, 138, true, true);
     g_seed = 22222;
-    t.concreteBowl = genConcrete(512, 150, false, false);
+    t.concreteBowl = genConcrete(512, 128, false, false);
     t.asphalt = genAsphalt(512);
     t.wood = genWood(512);
     t.metal = genMetal(256);
