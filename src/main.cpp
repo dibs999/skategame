@@ -176,9 +176,11 @@ int main(int argc, char** argv) {
             float dist = 2.6f + sp * 0.17f;
             Vec3 desired = game.s.pos - f * dist + Vec3(0, 0.92f + sp * 0.016f, 0)
                          + rgt * (game.s.lean * 0.5f);
-            // keep camera above ground
-            float gy = game.world.supportHeight(desired.x, desired.z, desired.y + 2.f);
-            if (desired.y < gy + 0.35f) desired.y = gy + 0.35f;
+            // keep camera above the surface at its own xz — the refY must reach
+            // high surfaces, or descending a steep ramp leaves the camera inside
+            // the wooden shell behind the skater
+            float gy = game.world.supportHeight(desired.x, desired.z, 100.f);
+            if (desired.y < gy + 0.4f) desired.y = gy + 0.4f;
             camPos = dampv(camPos, desired, 7.5f, frameDt);
             Vec3 look = game.s.pos + f * 1.6f + Vec3(0, 0.55f, 0);
             camTarget = dampv(camTarget, look, 10.f, frameDt);

@@ -607,10 +607,12 @@ void World::build(const TexSet& tex) {
     {
         auto& sc = cx.mb();
         sc.setColor({1, 1, 1});
-        auto posts = [&](float x0, float x1, float step, float hgt) {
+        auto posts = [&](float x0, float x1, float step, float) {
             for (float x = x0; x <= x1 + 0.01f; x += step) {
-                for (float z = MEGA_Z0 + 2; z <= MEGA_Z1 - 1; z += 8) {
-                    sc.cylinder({x, 0, z}, {x, hgt, z}, 0.09f, 8);
+                for (float z : {MEGA_Z0 + 0.8f, MEGA_Z1 - 0.8f}) {
+                    // height follows the ramp surface so posts never poke through
+                    float top = supportHeight(x, z, 100.f) - 0.06f;
+                    if (top > 0.4f) sc.cylinder({x, 0, z}, {x, top, z}, 0.09f, 8);
                 }
             }
         };
@@ -618,6 +620,7 @@ void World::build(const TexSet& tex) {
         posts(69.5f, 72.5f, 3, 1.6f); // under the kicker
         posts(79, 90, 3.5f, 2.6f);  // under the landing
         posts(92, 97, 2.5f, 5.0f);  // under the big quarter
+        // (posts sit at the outer edges only — see z loop below)
         cx.add(sc, {tex.wood, 1.5f, {0.55f, 0.42f, 0.3f}, 0.1f, 16.f, 1.f, 0.f, 0.f});
     }
     // backdrop: distant city blocks + ocean
@@ -684,12 +687,22 @@ void World::build(const TexSet& tex) {
     // painted plaza medallion: big circular ground graphic at the plaza heart
     {
         auto& md = cx.mb();
-        md.setColor({0.15f, 0.45f, 0.75f});
-        md.cylinder({-6, 0.008f, 4}, {-6, 0.012f, 4}, 3.4f, 28);
-        md.setColor({0.9f, 0.85f, 0.75f});
-        md.cylinder({-6, 0.010f, 4}, {-6, 0.014f, 4}, 2.6f, 28);
-        md.setColor({0.85f, 0.2f, 0.15f});
-        md.cylinder({-6, 0.012f, 4}, {-6, 0.016f, 4}, 1.2f, 24);
+        // flat ring strips at one height, non-overlapping radii — no z-fight
+        auto ring = [&](float r0, float r1, const Vec3& col) {
+            md.setColor(col);
+            int seg = 40;
+            for (int i = 0; i < seg; i++) {
+                float a0 = i / (float)seg * 6.2831853f, a1 = (i + 1) / (float)seg * 6.2831853f;
+                Vec3 p0{-6 + std::cos(a0) * r0, 0.03f, 4 + std::sin(a0) * r0};
+                Vec3 p1{-6 + std::cos(a1) * r0, 0.03f, 4 + std::sin(a1) * r0};
+                Vec3 p2{-6 + std::cos(a1) * r1, 0.03f, 4 + std::sin(a1) * r1};
+                Vec3 p3{-6 + std::cos(a0) * r1, 0.03f, 4 + std::sin(a0) * r1};
+                md.quad(p0, p1, p2, p3, {0, 1, 0}, 1.f, 1.f);
+            }
+        };
+        ring(2.6f, 3.4f, {0.15f, 0.45f, 0.75f});
+        ring(1.2f, 2.6f, {0.9f, 0.85f, 0.75f});
+        ring(0.0f, 1.2f, {0.85f, 0.2f, 0.15f});
         cx.add(md, {0, 1.f, {1,1,1}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
     }
     // traffic cones: bright orange color pops scattered as skate obstacles
