@@ -4,6 +4,7 @@
 #include "math3d.h"
 #include <vector>
 #include <cmath>
+#include <unordered_map>
 
 static unsigned g_seed = 1;
 static float hash2(int x, int y) {
@@ -403,6 +404,59 @@ static GLuint genWater(int w) {
     return finish(img, w, w);
 }
 
+
+// rasterize stroke-font tags into a texture: real letterforms instead of blobs
+static void tagText(std::vector<unsigned char>& img, int w, float x0, float y0,
+                    float sc, const char* word, int r, int g, int b) {
+    static const std::unordered_map<char, std::string> G = {
+        {'A', "0620|2046|1434"}, {'C', "4000|0006|0646"}, {'E', "4000|0006|0646|0333"},
+        {'K', "0006|4003|0346"}, {'P', "0600|0030|3041|4123|2303"}, {'R', "0600|0030|3041|4123|2303|2346"},
+        {'S', "4010|1001|0102|0213|1333|3344|4445|4536|3606"}, {'T', "0040|2026"},
+        {'8', "1030|4003|4346|1636|0306|0003|1333"}, {'V', "0026|2640"}, {'O', "1030|3041|4145|4536|3516|1505|0501|0110"},
+        {'N', "0600|0046|4640"}, {'I', "0040|2026|0646"}, {'L', "0006|0646"}
+    };
+    auto dot = [&](int px, int py, int cr, int cg, int cb, float k, int th) {
+        for (int dy = -th; dy <= th; dy++)
+            for (int dx = -th; dx <= th; dx++) {
+                int qx = px + dx, qy = py + dy;
+                if (qx < 0 || qy < 0 || qx >= w || qy >= w) continue;
+                if (dx * dx + dy * dy > th * th + 1) continue;
+                unsigned char* p = &img[(qy * w + qx) * 4];
+                for (int c2 = 0; c2 < 3; c2++)
+                    p[c2] = (unsigned char)lerpf(p[c2], (float)(c2 == 0 ? cr : c2 == 1 ? cg : cb), k);
+            }
+    };
+    float cx = x0;
+    for (const char* wp = word; *wp; wp++) {
+        auto it = G.find(*wp);
+        if (it == G.end()) { cx += sc * 5.f; continue; }
+        // pass 1: thick dark outline; pass 2: thinner bright fill
+        for (int pass = 0; pass < 2; pass++) {
+            int th = pass == 0 ? 3 : 1;
+            int cr = pass == 0 ? 20 : r, cg = pass == 0 ? 16 : g, cb = pass == 0 ? 20 : b;
+            float k = pass == 0 ? 0.8f : 0.95f;
+            size_t st = 0;
+            std::string s = it->second;
+            while (st < s.size()) {
+                size_t bar = s.find('|', st);
+                std::string seg = s.substr(st, bar == std::string::npos ? bar : bar - st);
+                if (seg.size() >= 4) {
+                    float xa = cx + (seg[0] - '0') * sc, ya = y0 + (seg[1] - '0') * sc;
+                    float xb = cx + (seg[2] - '0') * sc, yb = y0 + (seg[3] - '0') * sc;
+                    int steps = (int)(std::hypot(xb - xa, yb - ya) * 1.5f) + 1;
+                    for (int i = 0; i <= steps; i++) {
+                        float t = i / (float)steps;
+                        dot((int)(xa + (xb - xa) * t), (int)(ya + (yb - ya) * t), cr, cg, cb, k, th);
+                    }
+                }
+                if (bar == std::string::npos) break;
+                st = bar + 1;
+            }
+        }
+        cx += sc * 5.2f;
+    }
+}
+
 static GLuint genGraffiti(int w) {
     // weathered concrete base + layered spray-paint bubbles, arcs and drips
     auto img = base(w, w, 152, 148, 142);
@@ -466,6 +520,10 @@ static GLuint genGraffiti(int w) {
                 for (int cc = 0; cc < 3; cc++) p[cc] = (unsigned char)lerpf(p[cc], 105, k);
             }
         }
+    // stylized throw-up tags in real letterforms over the bubbles
+    tagText(img, w, w * 0.07f, w * 0.16f, w * 0.028f, "SK8", 250, 240, 60);
+    tagText(img, w, w * 0.42f, w * 0.52f, w * 0.024f, "PORT", 40, 190, 232);
+    tagText(img, w, w * 0.10f, w * 0.68f, w * 0.020f, "CARVERTON", 232, 44, 120);
     return finish(img, w, w);
 }
 
