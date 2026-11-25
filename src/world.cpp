@@ -300,6 +300,13 @@ void World::build(const TexSet& tex) {
     cx.ledgeEdges(31, 6, 36.5f, 7.7f, 0.5f);
     cx.ledgeEdges(-4, 12, 0, 16, 0.9f);
     cx.ledgeEdges(-21.2f, 19.6f, -19, 20.4f, 0.42f);
+    cx.ledgeEdges(-18.6f, -15.2f, -13.4f, -12.8f, 0.24f);
+    cx.ledgeEdges(11.4f, -25.2f, 16.6f, -22.8f, 0.24f);
+    cx.ledgeEdges(-26.6f, 28.8f, -21.4f, 31.2f, 0.24f);
+    cx.ledgeEdges(19.4f, 20.8f, 24.6f, 23.2f, 0.24f);
+    for (auto& mp : {Vec4(-18.6f, -15.2f, -13.4f, -12.8f), Vec4(11.4f, -25.2f, 16.6f, -22.8f),
+                     Vec4(-26.6f, 28.8f, -21.4f, 31.2f), Vec4(19.4f, 20.8f, 24.6f, 23.2f)})
+        solids.push_back({{mp.x, 0, mp.y}, {mp.z, 0.24f, mp.w}});
     cx.ledgeEdges(7, 29.6f, 9.2f, 30.4f, 0.42f);
     cx.ledgeEdges(7.2f, -22.6f, 8.8f, -21.4f, 0.72f);
     cx.ledgeEdges(-49, -9, -47, -7.6f, 0.8f);
@@ -436,6 +443,11 @@ void World::build(const TexSet& tex) {
         m.box({-2, 0.45f, 14}, {2, 0.45f, 2});
         m.box({-20.1f, 0.21f, 20}, {1.1f, 0.21f, 0.4f});
         m.box({8.1f, 0.21f, 30}, {1.1f, 0.21f, 0.4f});
+        // manual pads: low wide platforms filling the empty midfield
+        m.box({-16, 0.12f, -14}, {2.6f, 0.12f, 1.2f});
+        m.box({14, 0.12f, -24}, {2.6f, 0.12f, 1.2f});
+        m.box({-24, 0.12f, 30}, {2.6f, 0.12f, 1.2f});
+        m.box({22, 0.12f, 22}, {2.6f, 0.12f, 1.2f});
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
         // terracotta planters: warm color accents against the grey concrete
         auto& pl = cx.mb();
