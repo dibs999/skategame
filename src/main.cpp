@@ -225,7 +225,7 @@ int main(int argc, char** argv) {
             Vec3 c = game.s.pos;
             Vec3 eye = c + sunDir * 45.f;
             Mat4 lv = Mat4::lookAt(eye, c, {0, 1, 0});
-            Mat4 lp = Mat4::ortho(-28, 28, -28, 28, 5, 90);
+            Mat4 lp = Mat4::ortho(-18, 18, -18, 18, 5, 90);
             shadowVP = Mat4::mul(lp, lv);
         }
 

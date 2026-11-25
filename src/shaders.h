@@ -61,7 +61,7 @@ float shadowPCF(vec4 sc){
     vec2 ts = vec2(1.0/2048.0);
     for(int x=-1;x<=1;x++)
     for(int y=-1;y<=1;y++){
-        float d = texture(uShadowMap, p.xy + vec2(x,y)*ts).r;
+        float d = texture(uShadowMap, p.xy + vec2(x,y)*ts*1.6).r;
         sum += (p.z - bias) > d ? 0.0 : 1.0;
     }
     return sum / 9.0;
