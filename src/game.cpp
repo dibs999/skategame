@@ -510,7 +510,7 @@ void Game::update(const Input& in, float dt) {
         // breaks traction: a powerslide — board swings out, speed bleeds fast.
         bool sliding = in.brake && std::abs(steer) > 0.5f && s.speed > 3.f;
         // tic-tac: near-standstill carving pivots on the back truck instead
-        float yawRate = steer * (1.6f + s.speed * 0.12f) * (sliding ? 1.9f : 1.f);
+        float yawRate = steer * (1.6f + s.speed * 0.08f) * (sliding ? 1.9f : 1.f);   // less twitchy at speed
         if (s.speed < 1.2f) yawRate = steer * 3.2f;
         s.yaw += yawRate * dt;
         bool fakie = false;
