@@ -490,9 +490,27 @@ void World::build(const TexSet& tex) {
         strip(19.4f, 20.8f, 24.6f, 20.8f, 0.24f); strip(19.4f, 23.2f, 24.6f, 23.2f, 0.24f);
         cx.add(cp, {tex.metal, 0.8f, {0.88f,0.9f,0.94f}, 1.0f, 110.f, 1.f, 0.85f, 0.f});
     }
-    // parked cars on the asphalt lot
+    // parked cars on the asphalt lot — Blender car asset when present
+    std::map<std::string, Mesh> carParts;
+    bool hasCar = loadObjParts("assets/car.obj", carParts) ||
+                  loadObjParts("../assets/car.obj", carParts);
+    static std::map<std::string, Mesh> carStore;
+    if (hasCar) carStore = std::move(carParts);
     {
+        auto addCarAsset = [&](float cx0, float cz0, const Vec3& paint) {
+            Mat4 t = Mat4::translation({cx0, 0, cz0});
+            for (auto& kv : carStore) {
+                Material mm{0, 1.f, {1,1,1}, 0.9f, 140.f, 0.9f, 0.35f, 0.f};
+                if (kv.first == "paint_body") mm.color = paint;
+                else if (kv.first == "glass_cabin") { mm.color = {0.10f, 0.13f, 0.17f}; mm.specular = 0.95f; mm.shininess = 160.f; }
+                else if (kv.first == "rubber_wheel") { mm.color = {0.03f, 0.03f, 0.03f}; mm.specular = 0.1f; mm.shininess = 8.f; mm.metal = 0.f; }
+                else if (kv.first == "metal_hub") { mm.color = {0.75f, 0.77f, 0.8f}; mm.metal = 1.f; }
+                items.push_back({&kv.second, t, mm, true});
+            }
+            solids.push_back({{cx0 - 0.86f, 0, cz0 - 2.05f}, {cx0 + 0.86f, 1.05f, cz0 + 2.05f}});
+        };
         auto addCar = [&](float cx0, float cz0, const Vec3& paint) {
+            if (hasCar) { addCarAsset(cx0, cz0, paint); return; }
             MeshBuilder m;
             // stepped body: low hood + trunk, high mid belt, sunken glasshouse
             m.setColor(paint);
