@@ -29,11 +29,24 @@ struct HUD {
             font.drawBold(lb, s, x, y, sc, col, a);
         };
 
+        // soft shade plate behind the bottom-left readout for readability
+        auto plate = [&](float x, float y, float w, float h, float a) {
+            int lines = 14;
+            for (int i = 0; i < lines; i++) {
+                float yy = y + h * i / (lines - 1);
+                float fade = 1.f - std::abs(i / (lines - 1.f) - 0.5f) * 1.2f;
+                lb.line({x, yy, z}, {x + w, yy, z}, shad, a * fade);
+            }
+        };
         // trick name bottom-left (Skate 3 style corner readout)
         float tx = 18 * u, ty = H - 90 * u;
+        bool anyTrick = !s.trickName.empty() || (s.lineScore > 0);
+        if (anyTrick) plate(tx - 8 * u, ty - 34 * u, 330 * u, 100 * u, 0.16f);
         if (!s.trickName.empty()) {
             textBold(s.trickName, tx, ty, 3.4f * u, white);
-            ty += 0;
+            // thin accent underline beneath the trick name
+            float tw2 = font.textWidth(s.trickName, 3.4f * u);
+            lb.line({tx, ty + 15 * u, z}, {tx + tw2, ty + 15 * u, z}, accent, 0.85f);
         }
         // running trick chain of the current line (Skate 3 bottom readout)
         if (!s.lineTricks.empty() && s.lineScore > 0) {
@@ -43,10 +56,10 @@ struct HUD {
         char buf[64];
         if (s.lineScore > 0) {
             snprintf(buf, sizeof buf, "%d", s.lineScore);
-            text(buf, tx, ty + 30 * u, 3.0f * u, accent);
+            text(buf, tx, ty + 30 * u, 3.0f * u, white);
+            float sw2 = font.textWidth(buf, 3.0f * u);
             snprintf(buf, sizeof buf, "%dX", s.mult);
-            text(buf, tx + font.textWidth("LINE", 0) * 0 + 150 * u,
-                      ty + 30 * u, 3.0f * u, accent);
+            text(buf, tx + sw2 + 14 * u, ty + 30 * u, 3.0f * u, accent);
         }
         // total score top-left
         snprintf(buf, sizeof buf, "TOTAL %d", s.totalScore + s.lineScore);
@@ -63,9 +76,10 @@ struct HUD {
 
         // speedometer bottom-right
         float kph = s.speed * 3.6f;
-        snprintf(buf, sizeof buf, "%d KM/H", (int)(kph + 0.5f));
-        float sw = font.textWidth(buf, 2.6f * u);
-        text(buf, W - 20 * u - sw, H - 40 * u, 2.6f * u, white);
+        snprintf(buf, sizeof buf, "%d", (int)(kph + 0.5f));
+        float sw = font.textWidth(buf, 3.4f * u);
+        text(buf, W - 20 * u - sw, H - 40 * u, 3.4f * u, white);
+        text("KM/H", W - 20 * u - sw - font.textWidth("KM/H", 1.6f * u) - 6 * u, H - 40 * u + 4 * u, 1.6f * u, dim);
         // speed bar
         float bw = 150 * u, bx = W - 20 * u - bw, by = H - 60 * u;
         lb.line({bx, by, z}, {bx + bw, by, z}, dim, 0.8f);
@@ -117,7 +131,7 @@ struct HUD {
         const char* hint = "W PUSH  A/D CARVE  CTRL OLLIE  ARROWS TRICKS  SPC BONELESS  Q/E/F/G GRAB  R/V MANUAL";
         const char* hint2 = "M/T MARKER  1-5 SPOTS  O RUN  N DUSK  BKSP RESET";
         // hints fade out once the player has had time to learn them
-        float hintA = 0.8f * clampf((30.f - g.now) / 8.f, 0.f, 1.f);
+        float hintA = 0.55f * clampf((30.f - g.now) / 8.f, 0.f, 1.f);
         if (hintA > 0.01f) {
             text(hint, W / 2 - font.textWidth(hint, 2.0f * u) / 2, H - 40 * u, 2.0f * u, dim, hintA);
             text(hint2, W / 2 - font.textWidth(hint2, 2.0f * u) / 2, H - 20 * u, 2.0f * u, dim, hintA);

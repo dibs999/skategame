@@ -346,7 +346,7 @@ int main(int argc, char** argv) {
         glBindTexture(GL_TEXTURE_2D, bloomA.tex);
         comp.setI("uBloom", 1);
         comp.setF("uBloomAmt", 0.55f);
-        comp.setF("uDistort", 0.030f + game.s.speed * 0.0025f); // fisheye feel, more at speed
+        comp.setF("uDistort", 0.0f);
         comp.setF("uVignette", 0.25f);
         comp.setF("uExposure", dusk ? 1.18f : 1.35f);
         comp.setF("uFlash", game.flash * 0.4f);
