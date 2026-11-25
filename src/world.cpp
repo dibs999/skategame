@@ -837,6 +837,35 @@ void World::build(const TexSet& tex) {
         lamp(28, -14); lamp(28, 18); lamp(-44, 0); lamp(48, 24);
         cx.add(lp, {tex.metal, 1.f, {0.28f, 0.30f, 0.33f}, 0.7f, 70.f, 1.f, 0.5f, 0.f});
     }
+    // grass verges beyond the boundary walls: green contrast that frames the concrete
+    {
+        auto& g = cx.mb();
+        g.setColor({1, 1, 1});
+        // north verge (beyond z=-48 wall) and south verge (beyond z=64 wall)
+        for (auto& seg : {Vec2(-48.5f - 7.f, 0), Vec2(64.5f, 1)}) (void)seg;
+        auto strip = [&](float x0, float z0, float x1, float z1) {
+            float y = 0.02f;
+            unsigned a = g.vert({x0, y, z0}, {0, 1, 0}, x0 * 0.8f, z0 * 0.8f);
+            unsigned b = g.vert({x1, y, z0}, {0, 1, 0}, x1 * 0.8f, z0 * 0.8f);
+            unsigned cc = g.vert({x1, y, z1}, {0, 1, 0}, x1 * 0.8f, z1 * 0.8f);
+            unsigned d = g.vert({x0, y, z1}, {0, 1, 0}, x0 * 0.8f, z1 * 0.8f);
+            g.tri(a, cc, b); g.tri(a, d, cc);
+        };
+        strip(-74, -58, 106, -48.4f);   // north verge
+        strip(-74, 64.4f, 106, 74);     // south verge
+        strip(-84, -48, -74.4f, 64);    // west verge
+        cx.add(g, {tex.leaf, 1.f, {0.75f, 0.95f, 0.55f}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
+    }
+    // trash cans near the benches: dark ribbed cylinders, skate-plaza furniture
+    {
+        auto& tc = cx.mb();
+        tc.setColor({1, 1, 1});
+        for (auto& p : {Vec2(-18.5f, 20.5f), Vec2(9.8f, 29.2f), Vec2(-7, -8)}) {
+            tc.cylinder({p.x, 0, p.y}, {p.x, 0.78f, p.y}, 0.30f, 14);
+            tc.cylinder({p.x, 0.78f, p.y}, {p.x, 0.82f, p.y}, 0.34f, 14);   // rim
+        }
+        cx.add(tc, {tex.metal, 1.f, {0.16f, 0.20f, 0.18f}, 0.4f, 40.f, 1.f, 0.3f, 0.f});
+    }
     // sponsor-style banners on the lamp posts: color rectangles at height
     {
         auto& bn = cx.mb();
