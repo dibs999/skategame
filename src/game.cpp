@@ -1011,8 +1011,8 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         float swing = s.pushAnim > 0 ? std::sin((1 - s.pushAnim / 0.75f) * 6.28f) * 0.3f : 0;
         float outAmt = 0.22f + std::abs(s.lean) * 0.35f +
                        (s.state == S_GRIND ? 0.15f : 0) + (s.state == S_MANUAL ? 0.22f : 0);
-        handL = shoL + (rgt * -outAmt) + Vec3(0, -0.30f + cr * -0.05f, 0) + f * (0.08f + swing);
-        handR = shoR + (rgt * outAmt) + Vec3(0, -0.30f + cr * -0.05f, 0) + f * (0.05f - swing);
+        handL = shoL + (rgt * -outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.02f + swing);
+        handR = shoR + (rgt * outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.0f - swing);
         if (s.state == S_GRIND) {
             float wb = s.balance * 0.35f;
             handL = handL + Vec3(0, wb, 0) + f * 0.12f;
