@@ -220,11 +220,34 @@ void main(){
     vec3 col;
     if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ col = vec3(0.0); }
     else {
+        // FXAA: edge-directed smoothing — the aliasing crawl on rails/ledges was
+        // the single biggest cheapness tell, and MSAA costs 4x fill in software GL
+        vec2 px = 1.0 / vec2(textureSize(uScene, 0));
+        vec3 rgbNW = texture(uScene, uv + vec2(-1.0,-1.0)*px).rgb;
+        vec3 rgbNE = texture(uScene, uv + vec2( 1.0,-1.0)*px).rgb;
+        vec3 rgbSW = texture(uScene, uv + vec2(-1.0, 1.0)*px).rgb;
+        vec3 rgbSE = texture(uScene, uv + vec2( 1.0, 1.0)*px).rgb;
+        vec3 rgbM  = texture(uScene, uv).rgb;
+        vec3 luma = vec3(0.299, 0.587, 0.114);
+        float lNW = dot(rgbNW, luma), lNE = dot(rgbNE, luma);
+        float lSW = dot(rgbSW, luma), lSE = dot(rgbSE, luma);
+        float lM = dot(rgbM, luma);
+        float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+        float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+        vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
+        float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
+        float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+        dir = clamp(dir * rcpDirMin, -8.0, 8.0) * px;
+        vec3 rgbA = 0.5 * (texture(uScene, uv + dir * (1.0/3.0 - 0.5)).rgb +
+                           texture(uScene, uv + dir * (2.0/3.0 - 0.5)).rgb);
+        vec3 rgbB = rgbA * 0.5 + 0.25 * (texture(uScene, uv + dir * -0.5).rgb +
+                                         texture(uScene, uv + dir *  0.5).rgb);
+        float lB = dot(rgbB, luma);
+        col = (lB < lMin || lB > lMax) ? rgbA : rgbB;
         // slight chromatic aberration toward the frame edge (lens feel)
         vec2 ca = (uv - 0.5) * (0.0005 + r2 * 0.0016);
-        col.r = texture(uScene, uv + ca).r;
-        col.g = texture(uScene, uv).g;
-        col.b = texture(uScene, uv - ca).b;
+        col.r = mix(col.r, texture(uScene, uv + ca).r, 0.6);
+        col.b = mix(col.b, texture(uScene, uv - ca).b, 0.6);
         col += texture(uBloom, uv).rgb * uBloomAmt;
     }
     // filmic-ish tonemap
