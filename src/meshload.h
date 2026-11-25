@@ -35,7 +35,10 @@ inline bool loadObjParts(const char* path, std::map<std::string, Mesh>& out) {
             if (got != 6) continue;
             for (int k = 0; k < 3; k++) {
                 Vec3 p = pos[vi[k] - 1], n = nrm.empty() ? Vec3(0, 1, 0) : nrm[ni[k] - 1];
-                Vertex vx{p.x, p.y, p.z, n.x, n.y, n.z, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f};
+                // cylindrical-ish UVs so fabric/denim textures actually read on the mesh
+                float uu = (p.x + p.z) * 2.2f;
+                float vv = p.y * 2.2f;
+                Vertex vx{p.x, p.y, p.z, n.x, n.y, n.z, uu, vv, 1.f, 1.f, 1.f, 1.f};
                 cur->v.push_back(vx);
                 cur->idx.push_back((unsigned)cur->v.size() - 1);
             }
