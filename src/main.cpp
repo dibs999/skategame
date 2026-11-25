@@ -14,13 +14,15 @@
 #include "game.h"
 #include "vfont.h"
 #include "hud.h"
+#include "audio.h"
 
 int main(int argc, char** argv) {
     bool fullscreen = false;
     for (int i = 1; i < argc; i++)
         if (std::string(argv[i]) == "--fullscreen") fullscreen = true;
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    g_audio.init();
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -89,13 +91,14 @@ int main(int argc, char** argv) {
     SpriteBatch sb; sb.init();
     HUD hud;
 
+    bool dusk = false;                                    // N toggles golden hour
     Vec3 sunDir = Vec3(0.55f, 0.62f, 0.35f).normalized(); // direction TO the sun
     Vec3 camPos = game.s.pos + Vec3(-3, 1, 0);
     Vec3 camTarget = game.s.pos;
     float camRoll = 0;
 
     Input in;
-    bool prevJump = false, prevSet = false, prevGo = false;
+    bool prevJump = false, prevSet = false, prevGo = false, prevRun = false, prevDusk = false, prevReset = false, prevSpot[5] = {};
     bool running = true;
     Uint64 last = SDL_GetPerformanceCounter();
     double perfFreq = (double)SDL_GetPerformanceFrequency();
@@ -113,15 +116,17 @@ int main(int argc, char** argv) {
             if (ev.type == SDL_QUIT) running = false;
             if (ev.type == SDL_WINDOWEVENT && ev.window.event == SDL_WINDOWEVENT_RESIZED) {
                 W = ev.window.data1; H = ev.window.data2;
-                sceneFbo.create(W, H, false, true);
-                bloomA.create(W / 4, H / 4, false, true);
-                bloomB.create(W / 4, H / 4, false, true);
+                float rs = std::min(1.f, std::min(1440.f / W, 810.f / H));
+                int rw = (int)(W * rs), rh = (int)(H * rs);
+                sceneFbo.create(rw, rh, false, true);
+                bloomA.create(rw / 4, rh / 4, false, true);
+                bloomB.create(rw / 4, rh / 4, false, true);
             }
             if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) running = false;
         }
         const Uint8* k = SDL_GetKeyboardState(nullptr);
         in.push = k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP];
-        in.brake = k[SDL_SCANCODE_S] || (k[SDL_SCANCODE_DOWN] && game.s.state == S_GROUND);
+        in.brake = k[SDL_SCANCODE_S] || (k[SDL_SCANCODE_DOWN] && game.s.state != S_AIR);
         in.left = k[SDL_SCANCODE_A] || (k[SDL_SCANCODE_LEFT] && game.s.state == S_GROUND);
         in.right = k[SDL_SCANCODE_D] || (k[SDL_SCANCODE_RIGHT] && game.s.state == S_GROUND);
         in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_RCTRL] || k[SDL_SCANCODE_C];
@@ -134,8 +139,21 @@ int main(int argc, char** argv) {
         in.grab[1] = k[SDL_SCANCODE_E];
         in.grab[2] = k[SDL_SCANCODE_F];
         in.grab[3] = k[SDL_SCANCODE_G];
+        in.manual = k[SDL_SCANCODE_R];
+        in.noseManual = k[SDL_SCANCODE_V];
         in.setMarker = k[SDL_SCANCODE_M] && !prevSet;
         in.goMarker = k[SDL_SCANCODE_T] && !prevGo;
+        in.runToggle = k[SDL_SCANCODE_O] && !prevRun;
+        prevRun = k[SDL_SCANCODE_O];
+        in.resetScore = k[SDL_SCANCODE_BACKSPACE] && !prevReset;
+        prevReset = k[SDL_SCANCODE_BACKSPACE];
+        if (k[SDL_SCANCODE_N] && !prevDusk) { dusk = !dusk; sunDir = Vec3(dusk ? 0.9f : 0.55f, dusk ? 0.20f : 0.62f, dusk ? 0.28f : 0.35f).normalized(); }
+        prevDusk = k[SDL_SCANCODE_N];
+        in.spot = -1;
+        for (int i = 0; i < 5; i++)
+            if (k[SDL_SCANCODE_1 + i] && !prevSpot[i]) in.spot = i;
+        bool spotNow[5];
+        for (int i = 0; i < 5; i++) { spotNow[i] = k[SDL_SCANCODE_1 + i]; prevSpot[i] = spotNow[i]; }
         bool jumpNow = in.jump;
         in.jump = in.jump && !prevJump;
         prevJump = jumpNow; prevSet = k[SDL_SCANCODE_M]; prevGo = k[SDL_SCANCODE_T];
@@ -147,7 +165,8 @@ int main(int argc, char** argv) {
             game.update(in, dt);
             rem -= dt;
         }
-        in.setMarker = in.goMarker = false; // edge-triggered consumed
+        in.setMarker = in.goMarker = in.runToggle = in.resetScore = false; // edge-triggered consumed
+        in.spot = -1;
 
         // ---------- camera: low "filmer" cam ----------
         {
@@ -155,13 +174,29 @@ int main(int argc, char** argv) {
             Vec3 rgt(-std::sin(game.s.yaw), 0, std::cos(game.s.yaw));
             float sp = game.s.speed;
             float dist = 2.6f + sp * 0.17f;
-            Vec3 desired = game.s.pos - f * dist + Vec3(0, 0.62f + sp * 0.012f, 0)
+            Vec3 desired = game.s.pos - f * dist + Vec3(0, 0.92f + sp * 0.016f, 0)
                          + rgt * (game.s.lean * 0.5f);
-            // keep camera above ground
-            float gy = game.world.supportHeight(desired.x, desired.z, desired.y + 2.f);
-            if (desired.y < gy + 0.35f) desired.y = gy + 0.35f;
+            // keep camera above the surface at its own xz — the refY must reach
+            // high surfaces, or descending a steep ramp leaves the camera inside
+            // the wooden shell behind the skater
+            float gy = game.world.supportHeight(desired.x, desired.z, 100.f);
+            if (desired.y < gy + 0.4f) desired.y = gy + 0.4f;
+            // occlusion: march skater-head -> camera, clamp where terrain blocks
+            // the line of sight. Vertical lifting alone can't help when the
+            // camera swings behind a steep quarter wall — it ends up inside the
+            // wooden shell watching plywood for seconds.
+            Vec3 head = game.s.pos + Vec3(0, 1.35f, 0);
+            Vec3 ray = desired - head;
+            float tClear = 1.f;
+            for (int i = 1; i <= 12; i++) {
+                float t = i / 12.f;
+                Vec3 p = head + ray * t;
+                float g = game.world.supportHeight(p.x, p.z, 100.f);
+                if (p.y < g + 0.55f) { tClear = std::max((i - 1) / 12.f, 0.25f); break; }
+            }
+            if (tClear < 1.f) desired = head + ray * tClear;
             camPos = dampv(camPos, desired, 7.5f, frameDt);
-            Vec3 look = game.s.pos + f * 1.0f + Vec3(0, 0.68f, 0);
+            Vec3 look = game.s.pos + f * 1.6f + Vec3(0, 0.55f, 0);
             camTarget = dampv(camTarget, look, 10.f, frameDt);
             camRoll = dampf(camRoll, game.s.lean * 0.05f, 6, frameDt);
         }
@@ -227,18 +262,19 @@ int main(int argc, char** argv) {
         sky.setMat4("uMVP", Mat4::mul(vp, skyM));
         sky.setVec3("uSunDir", sunDir);
         sky.setF("uTime", timeAcc);
+        sky.setF("uDusk", dusk ? 1.f : 0.f);
         skyCube.draw();
         glDepthFunc(GL_LESS);
         glDepthMask(GL_TRUE);
         // lit scene
         lit.use();
         lit.setVec3("uSunDir", sunDir);
-        lit.setVec3("uSunColor", {1.55f, 1.42f, 1.15f});
+        lit.setVec3("uSunColor", dusk ? Vec3(1.8f, 0.95f, 0.5f) : Vec3(1.55f, 1.42f, 1.15f));
         lit.setVec3("uCamPos", camFinal);
-        lit.setVec3("uAmbientTop", {0.26f, 0.33f, 0.45f});
-        lit.setVec3("uAmbientBottom", {0.20f, 0.18f, 0.16f});
-        lit.setVec3("uFogColor", {0.72f, 0.80f, 0.90f});
-        lit.setF("uFogDensity", 0.0045f);
+        lit.setVec3("uAmbientTop", dusk ? Vec3(0.16f, 0.15f, 0.30f) : Vec3(0.26f, 0.33f, 0.45f));
+        lit.setVec3("uAmbientBottom", dusk ? Vec3(0.15f, 0.11f, 0.10f) : Vec3(0.20f, 0.18f, 0.16f));
+        lit.setVec3("uFogColor", dusk ? Vec3(0.82f, 0.52f, 0.38f) : Vec3(0.72f, 0.80f, 0.90f));
+        lit.setF("uFogDensity", dusk ? 0.006f : 0.0045f);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, shadowFbo.tex);
         lit.setI("uShadowMap", 1);
@@ -256,6 +292,7 @@ int main(int argc, char** argv) {
             lit.setF("uAO", d.mat.ao);
             lit.setF("uMetal", d.mat.metal);
             lit.setF("uEmissive", d.mat.emissive);
+            lit.setVec3("uTint", d.mat.color);
             if (d.mat.tex) {
                 glBindTexture(GL_TEXTURE_2D, d.mat.tex);
                 lit.setI("uTex", 0);
@@ -311,8 +348,9 @@ int main(int argc, char** argv) {
         comp.setF("uBloomAmt", 0.55f);
         comp.setF("uDistort", 0.030f + game.s.speed * 0.0025f); // fisheye feel, more at speed
         comp.setF("uVignette", 0.25f);
-        comp.setF("uExposure", 1.35f);
+        comp.setF("uExposure", dusk ? 1.18f : 1.35f);
         comp.setF("uFlash", game.flash * 0.4f);
+        comp.setF("uTime", SDL_GetTicks() * 0.001f);
         drawFSQ();
         glEnable(GL_DEPTH_TEST);
 
@@ -323,7 +361,7 @@ int main(int argc, char** argv) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         line.use();
         line.setMat4("uMVP", ortho);
-        glLineWidth(2.f);
+        glLineWidth(2.5f);
         hud.draw(lb, game, W, H);
         lb.flush();
         glDisable(GL_BLEND);
