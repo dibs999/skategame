@@ -1007,10 +1007,15 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         out.push_back({&mSphere, Mat4::mul(Mat4::translation(head),
                        Mat4::scale({0.115f, 0.125f, 0.115f})), skin});
     }
-    Mat4 capm = Mat4::translation(head + Vec3(0, 0.10f, 0)) * Mat4::rotateY(s.yaw);
-    out.push_back({&mSphere, Mat4::mul(capm, Mat4::scale({0.125f, 0.075f, 0.125f})), cap});
-    out.push_back({&mBox, Mat4::mul(Mat4::translation(head + f * 0.12f + Vec3(0, 0.095f, 0)),
-                   Mat4::rotateY(s.yaw) * Mat4::scale({0.16f, 0.02f, 0.12f})), cap});
+    if (hasSkaterMesh) {
+        Mat4 capm = Mat4::translation(head + Vec3(0, 0.16f, 0)) * Mat4::rotateY(s.yaw);
+        out.push_back({&skaterParts.at("cap"), Mat4::mul(capm, Mat4::scale({1.05f, 1.05f, 1.05f})), cap});
+    } else {
+        Mat4 capm = Mat4::translation(head + Vec3(0, 0.10f, 0)) * Mat4::rotateY(s.yaw);
+        out.push_back({&mSphere, Mat4::mul(capm, Mat4::scale({0.125f, 0.075f, 0.125f})), cap});
+        out.push_back({&mBox, Mat4::mul(Mat4::translation(head + f * 0.12f + Vec3(0, 0.095f, 0)),
+                       Mat4::rotateY(s.yaw) * Mat4::scale({0.16f, 0.02f, 0.12f})), cap});
+    }
 
     // arms
     Vec3 shoL = neck - rgt * 0.15f + Vec3(0, -0.02f, 0);
@@ -1062,7 +1067,13 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     }
     for (int hd = 0; hd < 2; hd++) {
         Vec3 hp = hd == 0 ? handL : handR;
-        out.push_back({&mSphere, Mat4::mul(Mat4::translation(hp), Mat4::scale({0.052f, 0.06f, 0.045f})), skin});
+        Vec3 ep = hd == 0 ? elbL : elbR;
+        if (hasSkaterMesh) {
+            Vec3 dir = hp - ep;
+            out.push_back({&skaterParts.at("hand"), partXform(hp, hp + dir * 0.35f, f, 0.12f), skin});
+        } else {
+            out.push_back({&mSphere, Mat4::mul(Mat4::translation(hp), Mat4::scale({0.052f, 0.06f, 0.045f})), skin});
+        }
     }
     if (hasSkaterMesh) {
         // joint filler spheres mask the rigid seams of the segmented mesh
