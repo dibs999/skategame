@@ -1,6 +1,7 @@
 // Park construction: terrain height field, solid boxes, rideable height fields,
 // grind edges, and all static geometry with materials.
 #include "world.h"
+#include "meshload.h"
 #include "geom.h"
 #include <cmath>
 #include <vector>
@@ -620,8 +621,15 @@ void World::build(const TexSet& tex) {
         cp.cylinder({52, 2.52f, -38}, {52, 2.52f, -30}, 0.045f, 10);
         cx.add(cp, {tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
     }
+    // Blender mega ramp asset replaces the procedural shells when present
+    std::map<std::string, Mesh> megaParts;
+    bool hasMega = loadObjParts("assets/megaramp.obj", megaParts) ||
+                   loadObjParts("../assets/megaramp.obj", megaParts);
+    static std::map<std::string, Mesh> megaStore;
+    if (hasMega) megaStore = std::move(megaParts);
+
     // mega ramp (wooden surfaces)
-    {
+    if (!hasMega) {
         auto& m = cx.mb();
         m.setColor({1, 1, 1});
         m.box({53, 4, zc}, {3, 4, mw / 2});                    // tower
@@ -663,6 +671,14 @@ void World::build(const TexSet& tex) {
         posts(92, 97, 2.5f, 5.0f);  // under the big quarter
         // (posts sit at the outer edges only — see z loop below)
         cx.add(sc, {tex.wood, 1.5f, {0.55f, 0.42f, 0.3f}, 0.1f, 16.f, 1.f, 0.f, 0.f});
+    if (hasMega) {
+        for (auto& kv : megaStore) {
+            Material mm = kv.first.rfind("wood", 0) == 0
+                ? Material{tex.wood, 0.5f, {1,1,1}, 0.25f, 32.f, 1.f, 0.f, 0.f}
+                : Material{tex.metal, 1.f, {0.9f,0.9f,0.92f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
+    }
     }
     // backdrop: distant city blocks + ocean
     {
