@@ -1,110 +1,109 @@
-# Blender headless: builds a segmented low-poly skater body, exports Wavefront OBJ.
-# Each body part is a separate named object, modeled pointing along -Y (bone dir convention:
-# origin at the proximal joint, mesh extends toward -Y). Units: meters.
-import bpy, math, sys
+# Blender headless: segmented skater body v2 — composite shapes per part for human silhouette.
+# Each part along -Y, origin at proximal joint. Units: meters.
+import bpy, math
 
 for o in list(bpy.data.objects):
     bpy.data.objects.remove(o, do_unlink=True)
 
-def smooth(obj):
-    for p in obj.data.polygons: p.use_smooth = True
-
-def part_uvsphere(name, loc, scale, seg=16, rings=12):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=seg, ring_count=rings, location=(0,0,0))
-    o = bpy.context.object; o.name = name
-    o.scale = scale
-    bpy.ops.object.transform_apply(scale=True)
-    # shift so origin is at top (proximal) and mesh extends toward -Y
-    for v in o.data.vertices:
-        x,y,z = v.co.x, v.co.y, v.co.z
-        v.co = (x, z - loc, y)  # reorient: blender z-up -> y-down bone axis
-    smooth(o)
-    return o
-
-def cyl(name, r0, r1, length, seg=12, taper_top=True):
-    # tapered cylinder along -Y, origin at proximal end
-    bpy.ops.mesh.primitive_cone_add(vertices=seg, radius1=r1, radius2=r0, depth=length, location=(0,0,0))
-    o = bpy.context.object; o.name = name
-    for v in o.data.vertices:
-        x,y,z = v.co.x, v.co.y, v.co.z
-        v.co = (x, z - length*0.0 - 0.0, y)
-    # recenter: cone is centered; shift so top (radius2 end, +z) is at origin and extends -Y
-    for v in o.data.vertices:
-        v.co = (v.co.x, v.co.y - length*0.5 + 0.0, v.co.z)
-    # hmm simpler: rotate z-axis onto -Y and shift
-    smooth(o)
-    return o
-
-# Simplest robust approach: build each part as primitive(s), join per part, then transform
-# so the part extends along -Y with origin at proximal joint. We do the reorientation in
-# the exporter by rotating the object instead of vertices.
-
-def make_limb(name, r_top, r_bot, length, seg=12):
-    bpy.ops.mesh.primitive_cone_add(vertices=seg, radius1=r_bot, radius2=r_top, depth=length)
-    o = bpy.context.object; o.name = name
-    bpy.ops.object.shade_smooth()
-    # cone: +z is radius2 (top/proximal). rotate so +z -> +Y? we want mesh along -Y with
-    # proximal end at origin: rotate 90deg about X so z axis becomes -Y? rotating -90 about X
-    # maps +z to -Y? test: rot X by +90: z->y? use quaternion: we want +z to map to +Y up...
-    # Convention: we export with transform applied: proximal end (former +z cap) at y=0,
-    # distal end at y=-length.
-    o.rotation_euler = (math.radians(-90), 0, 0)  # +z -> -y? verify: rotating about X by -90: z axis goes to -Y yes
-    o.location = (0, 0, 0)
-    bpy.context.view_layer.objects.active = o
-    bpy.ops.object.transform_apply(rotation=True, location=True)
-    # after rotation mesh spans y in [-length/2, +length/2] flipped; shift proximal to 0
-    zs = [v.co.y for v in o.data.vertices]
-    top = max(zs)
+def _top_zero(o):
+    ys = [v.co.y for v in o.data.vertices]
+    top = max(ys)
     for v in o.data.vertices:
         v.co = (v.co.x, v.co.y - top, v.co.z)
-    return o
 
-def make_ball(name, scale, seg=14, rings=10):
+def ball(scale, seg=20, rings=16):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=seg, ring_count=rings)
-    o = bpy.context.object; o.name = name
+    o = bpy.context.object
     o.scale = scale
     bpy.ops.object.transform_apply(scale=True)
     bpy.ops.object.shade_smooth()
-    ys = [v.co.y for v in o.data.vertices]
-    top = max(ys)
-    for v in o.data.vertices:
-        v.co = (v.co.x, v.co.y - top, v.co.z)
     return o
 
-def make_box(name, scale, bevel=0.02):
-    bpy.ops.mesh.primitive_cube_add()
-    o = bpy.context.object; o.name = name
-    o.scale = scale
-    bpy.ops.object.transform_apply(scale=True)
+def cone(r_top, r_bot, length, seg=20):
+    bpy.ops.mesh.primitive_cone_add(vertices=seg, radius1=r_bot, radius2=r_top, depth=length)
+    o = bpy.context.object
     bpy.ops.object.shade_smooth()
-    ys = [v.co.y for v in o.data.vertices]
-    top = max(ys)
-    for v in o.data.vertices:
-        v.co = (v.co.x, v.co.y - top, v.co.z)
+    o.rotation_euler = (math.radians(-90), 0, 0)
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.transform_apply(rotation=True)
     return o
 
-# torso: tapered cylinder (waist narrower, chest wide), squashed front-to-back,
-# origin at shoulder line, extends down to hips
-torso = make_limb("torso", 0.175, 0.115, 0.42, seg=16)
-for v in torso.data.vertices:
-    v.co = (v.co.x, v.co.y, v.co.z * 0.62)   # flatten front-back
-# pelvis/hips block
-make_ball("pelvis", (0.165, 0.12, 0.105))
-# head: origin at neck top, extends down? better: center-ish. use ball with origin at top
-make_ball("head", (0.082, 0.105, 0.088), seg=18, rings=14)
-# cap brim: flattened box
-make_box("cap", (0.09, 0.02, 0.11))
-# upper/lower arms: slim tapered cylinders
-make_limb("upperarm", 0.062, 0.052, 0.31)
-make_limb("forearm", 0.052, 0.042, 0.29)
-make_ball("hand", (0.045, 0.055, 0.04), seg=10, rings=8)
-# upper/lower legs: thicker
-make_limb("thigh", 0.095, 0.072, 0.47)
-make_limb("shin", 0.068, 0.052, 0.47)
-# shoe: box-ish, origin at ankle top, extends down and forward (+z toe)
-shoe = make_box("shoe", (0.055, 0.035, 0.13), bevel=0.03)
+def shift(o, dx, dy, dz):
+    for v in o.data.vertices:
+        v.co = (v.co.x + dx, v.co.y + dy, v.co.z + dz)
 
-# write OBJ manually: o + v/vn/f, full control, no exporter-version issues
+def joinpart(name, objs):
+    # join objects into one named part, origin at top (proximal)
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.join()
+    o = bpy.context.object
+    o.name = name
+    _top_zero(o)
+    return o
+
+# ---- torso: chest ball overlapping tapered trunk, flattened front-back ----
+trunk = cone(0.185, 0.115, 0.44, seg=22)
+for v in trunk.data.vertices:
+    v.co = (v.co.x, v.co.y, v.co.z * 0.60)
+chest = ball((0.175, 0.115, 0.095), seg=22, rings=16)
+shift(chest, 0, -0.10, 0)
+joinpart("torso", [trunk, chest])
+
+# ---- pelvis ----
+pelv = ball((0.16, 0.115, 0.10), seg=20, rings=14)
+butt = ball((0.15, 0.10, 0.085), seg=18, rings=12)
+shift(butt, 0, -0.06, -0.03)
+joinpart("pelvis", [pelv, butt])
+
+# ---- head: cranium + jaw taper ----
+cran = ball((0.082, 0.10, 0.086), seg=22, rings=16)
+jaw = ball((0.062, 0.055, 0.066), seg=16, rings=12)
+shift(jaw, 0, -0.095, 0.018)
+joinpart("head", [cran, jaw])
+
+# ---- cap: dome + forward brim ----
+dome = ball((0.088, 0.055, 0.092), seg=20, rings=12)
+brim = ball((0.055, 0.012, 0.06), seg=14, rings=8)
+shift(brim, 0, -0.03, 0.11)
+joinpart("cap", [dome, brim])
+
+# ---- arms: muscle-shaped limbs ----
+ua = cone(0.066, 0.048, 0.31, seg=18)
+bic = ball((0.06, 0.09, 0.055), seg=14, rings=10)
+shift(bic, 0, -0.10, 0)
+joinpart("upperarm", [ua, bic])
+
+fa = cone(0.048, 0.038, 0.29, seg=18)
+joinpart("forearm", [fa])
+
+hand = ball((0.042, 0.06, 0.032), seg=14, rings=10)
+for v in hand.data.vertices:
+    v.co = (v.co.x, v.co.y, v.co.z * 0.7)
+joinpart("hand", [hand])
+
+# ---- legs: thigh with quad bulge, shin with calf ----
+th = cone(0.098, 0.068, 0.47, seg=20)
+quad = ball((0.085, 0.13, 0.08), seg=16, rings=12)
+shift(quad, 0, -0.13, 0.01)
+joinpart("thigh", [th, quad])
+
+sh = cone(0.068, 0.048, 0.47, seg=20)
+calf = ball((0.058, 0.11, 0.06), seg=16, rings=12)
+shift(calf, 0, -0.09, -0.015)
+joinpart("shin", [sh, calf])
+
+# ---- shoe: sole wedge + toe box + heel ----
+sole = ball((0.052, 0.024, 0.135), seg=16, rings=10)
+upper = ball((0.05, 0.045, 0.105), seg=16, rings=12)
+shift(upper, 0, -0.028, -0.012)
+heel = ball((0.048, 0.05, 0.05), seg=14, rings=10)
+shift(heel, 0, -0.025, -0.085)
+shoeo = joinpart("shoe", [sole, upper, heel])
+# extend toe forward +z: scale z slightly toward front already in shapes
+
+# ---- write OBJ manually ----
 path = "/home/ubuntu/repos/skategame/assets/skater.obj"
 ofs = 1
 with open(path, "w") as fh:
@@ -115,7 +114,6 @@ with open(path, "w") as fh:
         fh.write("o %s\n" % o.name)
         for v in m.vertices:
             fh.write("v %.5f %.5f %.5f\n" % (v.co.x, v.co.y, v.co.z))
-        # per-vertex normals after smooth shading
         for v in m.vertices:
             fh.write("vn %.4f %.4f %.4f\n" % (v.normal.x, v.normal.y, v.normal.z))
         for t in m.loop_triangles:
