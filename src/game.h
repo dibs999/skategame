@@ -77,6 +77,8 @@ struct Skater {
     float grindDist = 0;
     bool grindBoardslide = false;
     int grindType = 0;      // 0=50-50 1=boardslide 2=smith 3=crooked 4=lipslide
+    Vec3 prevN{0, 1, 0};    // surface normal last ground frame (rotation constraint)
+    bool hasPrevN = false;
     int manualDir = 0;      // +1 manual (back trucks), -1 nose manual
     float revertT = 0;      // post-landing pivot
     int revertDir = 0;

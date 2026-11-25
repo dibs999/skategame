@@ -324,6 +324,7 @@ void Game::endManual() {
 }
 
 void Game::land(bool bankLine, float steer) {
+    s.hasPrevN = false;
     float impact = -s.vel.y;
     bool bad = (s.flip != F_NONE && s.flipPhase < 0.8f);
     bool upsideDown = std::fmod(std::abs(s.boardRoll), 6.28f) > 2.2f &&
@@ -545,22 +546,37 @@ void Game::update(const Input& in, float dt) {
             s.trickName = "POWERSLIDE"; s.trickT = 0.4f;
             s.lineScore += (int)(45 * dt * s.mult);
         }
-        s.vel.x -= s.vel.x * fr * dt;
-        s.vel.z -= s.vel.z * fr * dt;
+        s.vel = s.vel * (1.f - fr * dt);
         if (s.speed > PUSH_CAP * 1.02f && s.pushAnim > 0) {
             Vec3 hv = s.vel * (1.f / std::max(s.speed, 0.01f));
             s.vel.x = hv.x * std::min(s.speed, 22.f); s.vel.z = hv.z * std::min(s.speed, 22.f);
         }
-        // constrain velocity to the surface tangent plane (full 3D): project
-        // out the normal component and add gravity's tangential part. The
-        // projection rotates the velocity with the surface — horizontal speed
-        // converts to vertical on a kicker and back on a landing — while only
-        // ever removing energy through the constraint, never inventing it.
+        // constrain velocity to the surface by ROTATING it with the surface
+        // normal frame-to-frame. A constraint force does no work, so speed is
+        // preserved through curvature — projection instead bleeds energy that
+        // physics never would (that artifact was the roll-in scrub, the
+        // bowl-lip pop and the kicker climb loss in one).
         {
-            Vec3 n0 = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
-            s.vel = s.vel - n0 * s.vel.dot(n0);
+            Vec3 n1 = world.supportNormal(s.pos.x, s.pos.z, s.pos.y);
+            if (s.hasPrevN) {
+                Vec3 axis = s.prevN.cross(n1);
+                float sinA = axis.len();
+                if (sinA > 1e-6f) {
+                    float cosA = std::max(-1.f, std::min(1.f, s.prevN.dot(n1)));
+                    float ang = std::atan2(sinA, cosA);
+                    if (ang > 0.45f) ang = 0.45f;   // numerical-noise cap
+                    Vec3 k = axis * (1.f / sinA);
+                    float ca = std::cos(ang), sa = std::sin(ang);
+                    Vec3 v = s.vel;
+                    s.vel = v * ca + k.cross(v) * sa + k * (k.dot(v) * (1.f - ca));
+                }
+                // absorb only the residual normal component (numerical drift),
+                // never the tangential motion
+                s.vel = s.vel - n1 * s.vel.dot(n1);
+            }
+            s.prevN = n1; s.hasPrevN = true;
             Vec3 gg(0, -GRAV, 0);
-            Vec3 at = gg - n0 * gg.dot(n0);
+            Vec3 at = gg - n1 * gg.dot(n1);
             s.vel += at * dt;
             float vl = s.vel.len();
             if (vl > 30.f) s.vel = s.vel * (30.f / vl);
@@ -617,6 +633,7 @@ void Game::update(const Input& in, float dt) {
         break;
     }
     case S_AIR: {
+        s.hasPrevN = false;
         s.airTime += dt;
         s.trickWindow -= dt;
         s.vel.y -= GRAV * dt;
@@ -779,8 +796,7 @@ void Game::update(const Input& in, float dt) {
         Vec3 a = Vec3(0, -GRAV, 0) - n * Vec3(0, -GRAV, 0).dot(n);
         s.vel += a * dt;
         float fr = 0.30f;
-        s.vel.x -= s.vel.x * fr * dt;
-        s.vel.z -= s.vel.z * fr * dt;
+        s.vel = s.vel * (1.f - fr * dt);
         s.vel.y = 0;
         // move (same wall/ground logic as rolling)
         Vec3 np = s.pos + Vec3(s.vel.x, 0, s.vel.z) * dt;
