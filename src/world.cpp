@@ -663,6 +663,17 @@ void World::build(const TexSet& tex) {
         bn.setColor({1, 1, 1});
         cx.add(bn, {0, 1.f, {1,1,1}, 0.1f, 12.f, 1.f, 0.f, 0.f});
     }
+    // painted plaza medallion: big circular ground graphic at the plaza heart
+    {
+        auto& md = cx.mb();
+        md.setColor({0.15f, 0.45f, 0.75f});
+        md.cylinder({-6, 0.008f, 4}, {-6, 0.012f, 4}, 3.4f, 28);
+        md.setColor({0.9f, 0.85f, 0.75f});
+        md.cylinder({-6, 0.010f, 4}, {-6, 0.014f, 4}, 2.6f, 28);
+        md.setColor({0.85f, 0.2f, 0.15f});
+        md.cylinder({-6, 0.012f, 4}, {-6, 0.016f, 4}, 1.2f, 24);
+        cx.add(md, {0, 1.f, {1,1,1}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
+    }
     // traffic cones: bright orange color pops scattered as skate obstacles
     {
         auto& cn = cx.mb();
