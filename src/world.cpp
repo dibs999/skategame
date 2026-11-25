@@ -66,6 +66,7 @@ float World::supportHeight(float x, float z, float refY) const {
     return h;
 }
 
+
 Vec3 World::supportNormal(float x, float z, float refY) const {
     float h = terrainHeight(x, z);
     int win = -2; // -2 terrain, -1 box, >=0 field index
@@ -110,6 +111,18 @@ bool World::collideWalls(Vec3& pos, Vec3& vel) const {
             hit = true;
         }
     }
+    // height fields whose surface is well above the skater are walls
+    // (all fields ramp along x, so push out along x)
+    for (auto& f : g_fields) {
+        if (pos.x < f.x0 - r || pos.x > f.x1 + r ||
+            pos.z < f.z0 - r || pos.z > f.z1 + r) continue;
+        float hh = f.eval(pos.x, pos.z);
+        if (hh > -1e8f && hh > pos.y + STEP + 0.05f) {
+            if (pos.x - f.x0 < f.x1 - pos.x) { pos.x = f.x0 - r; if (vel.x > 0) vel.x = 0; }
+            else { pos.x = f.x1 + r; if (vel.x < 0) vel.x = 0; }
+            hit = true;
+        }
+    }
     if (pos.x < -72) { pos.x = -72; if (vel.x < 0) vel.x = 0; hit = true; }
     if (pos.x > 104) { pos.x = 104; if (vel.x > 0) vel.x = 0; hit = true; }
     if (pos.z < -47) { pos.z = -47; if (vel.z < 0) vel.z = 0; hit = true; }
@@ -144,10 +157,69 @@ struct Ctx {
     World& w;
     Ctx(const TexSet& t, World& ww) : tex(t), w(ww) {}
     std::vector<MeshBuilder> builders;
+    struct Pending { MeshBuilder b; Material mat; bool shadow; };
+    std::vector<Pending> pending;
     MeshBuilder& mb() { builders.emplace_back(); return builders.back(); }
     void add(const MeshBuilder& m, const Material& mat, bool shadow = true) {
-        g_meshes.push_back(const_cast<MeshBuilder&>(m).build());
-        w.items.push_back({&g_meshes.back(), Mat4(), mat, shadow});
+        pending.push_back({m, mat, shadow});
+    }
+    // Bake hemisphere occlusion vs the solid boxes into vertex alpha, then upload.
+    void finish() {
+        for (auto& p : pending) {
+            bakeAO(p.b);
+            g_meshes.push_back(p.b.build());
+            w.items.push_back({&g_meshes.back(), Mat4(), p.mat, p.shadow});
+        }
+    }
+    static bool rayBox(const Vec3& o, const Vec3& d, const SolidBox& b, float maxT) {
+        float t0 = 0.f, t1 = maxT;
+        for (int ax = 0; ax < 3; ax++) {
+            float oo = ax == 0 ? o.x : ax == 1 ? o.y : o.z;
+            float dd = ax == 0 ? d.x : ax == 1 ? d.y : d.z;
+            float mn = ax == 0 ? b.mn.x : ax == 1 ? b.mn.y : b.mn.z;
+            float mx = ax == 0 ? b.mx.x : ax == 1 ? b.mx.y : b.mx.z;
+            if (std::abs(dd) < 1e-8f) { if (oo < mn || oo > mx) return false; continue; }
+            float ta = (mn - oo) / dd, tb = (mx - oo) / dd;
+            if (ta > tb) std::swap(ta, tb);
+            t0 = std::max(t0, ta); t1 = std::min(t1, tb);
+            if (t0 > t1) return false;
+        }
+        return t1 > 0.f;
+    }
+    void bakeAO(MeshBuilder& mb) {
+        const int K = 8;
+        const float R = 2.2f;
+        for (auto& vtx : mb.v) {
+            Vec3 n(vtx.nx, vtx.ny, vtx.nz);
+            if (n.len2() < 1e-6f) continue;
+            Vec3 nn = n.normalized();
+            Vec3 o(vtx.px + nn.x * 0.03f, vtx.py + nn.y * 0.03f, vtx.pz + nn.z * 0.03f);
+            // tangent frame + golden-spiral hemisphere samples
+            Vec3 t = (std::abs(nn.y) < 0.9f ? nn.cross(Vec3(0, 1, 0)) : nn.cross(Vec3(1, 0, 0))).normalized();
+            Vec3 bb = nn.cross(t);
+            int occ = 0;
+            for (int i = 0; i < K; i++) {
+                float u = (i + 0.5f) / K, v = std::fmod(i * 0.6180339f, 1.f);
+                float cz = 1.f - u * 0.85f;            // bias toward normal
+                float sz = std::sqrt(std::max(0.f, 1 - cz * cz));
+                float a = v * 6.2831853f;
+                Vec3 d = t * (sz * std::cos(a)) + bb * (sz * std::sin(a)) + nn * cz;
+                bool hit = false;
+                for (auto& sb : w.solids) {
+                    Vec3 c = (sb.mn + sb.mx) * 0.5f;
+                    float rr = (sb.mx - sb.mn).len() * 0.5f + R;
+                    if ((c - o).len2() > rr * rr) continue;
+                    // ignore the solid the sample starts inside (the prop's own collision box)
+                    if (o.x > sb.mn.x - 0.02f && o.x < sb.mx.x + 0.02f &&
+                        o.y > sb.mn.y - 0.02f && o.y < sb.mx.y + 0.02f &&
+                        o.z > sb.mn.z - 0.02f && o.z < sb.mx.z + 0.02f) continue;
+                    if (rayBox(o, d, sb, R)) { hit = true; break; }
+                }
+                if (hit) occ++;
+            }
+            float ao = 1.f - (occ / (float)K) * 0.72f;
+            vtx.a *= ao;
+        }
     }
     void ledgeEdges(float x0, float z0, float x1, float z1, float y) {
         w.edges.push_back({{x0, y, z0}, {x1, y, z0}, false});
@@ -176,9 +248,11 @@ void World::build(const TexSet& tex) {
     addHF(-6, 12, -4, 16, 1, 0.0f, 0.9f);        // funbox west bank
     addHF(0, 12, 2, 16, 1, 0.9f, 0.0f);          // funbox east bank
     addHF(56, MEGA_Z0, 64, MEGA_Z1, 2, 64, 8);   // mega roll-in (rises toward -x)
-    addHF(69, MEGA_Z0, 73, MEGA_Z1, 1, 0.0f, 1.4f); // kicker
-    addHF(79, MEGA_Z0, 91, MEGA_Z1, 1, 4.0f, 0.0f); // landing
+    addHF(69, MEGA_Z0, 73, MEGA_Z1, 0, 69, 5.5f); // kicker (46 deg lip)
+    addHF(77, MEGA_Z0, 91, MEGA_Z1, 1, 3.0f, 0.0f); // landing
     addHF(91, MEGA_Z0, 98, MEGA_Z1, 0, 91, 7);   // big quarter (rises toward +x)
+    addHF(42, -38, 44.5f, -30, 2, 44.5f, 2.5f);  // mini ramp west transition
+    addHF(49.5f, -38, 52, -30, 0, 49.5f, 2.5f);  // mini ramp east transition
 
     // ---- solids ----
     solids.push_back({{PLAT_X0, 0, PLAT_Z0}, {PLAT_X1, PLAT_H, PLAT_Z1}}); // plateau
@@ -196,6 +270,9 @@ void World::build(const TexSet& tex) {
     solids.push_back({{-4, 0, 12}, {0, 0.9f, 16}});                        // funbox
     solids.push_back({{-21.2f, 0, 19.6f}, {-19, 0.42f, 20.4f}});           // bench
     solids.push_back({{7, 0, 29.6f}, {9.2f, 0.42f, 30.4f}});               // bench
+    solids.push_back({{7.2f, 0, -22.6f}, {8.8f, 0.72f, -21.4f}});          // picnic tabletop
+    solids.push_back({{7.2f, 0, -23.3f}, {8.8f, 0.42f, -22.8f}});          // picnic seat S
+    solids.push_back({{7.2f, 0, -21.2f}, {8.8f, 0.42f, -20.7f}});          // picnic seat N
     solids.push_back({{-41.1f, 0, 8.9f}, {-38.9f, 0.55f, 11.1f}});         // planter
     solids.push_back({{38.9f, 0, -21.1f}, {41.1f, 0.55f, -18.9f}});        // planter
     solids.push_back({{-9.1f, 0, 34.9f}, {-6.9f, 0.55f, 37.1f}});          // planter
@@ -204,6 +281,8 @@ void World::build(const TexSet& tex) {
     solids.push_back({{-21, 0, 37.4f}, {-19, 0.8f, 38.8f}});               // barrier
     solids.push_back({{50, 0, MEGA_Z0}, {56, 8, MEGA_Z1}});                // mega tower
     solids.push_back({{98, 0, MEGA_Z0}, {106, 7, MEGA_Z1}});               // mega deck
+    solids.push_back({{39, 0, -38}, {42, 2.5f, -30}});                     // mini ramp west deck
+    solids.push_back({{52, 0, -38}, {55, 2.5f, -30}});                     // mini ramp east deck
     solids.push_back({{-30, 0, 18.4f}, {30, 0.14f, 19.0f}});               // curb
     solids.push_back({{-30, 0, -8.6f}, {10, 0.14f, -8.0f}});               // curb
     solids.push_back({{-73.5f, 0, -48}, {-72.5f, 1, 64}});                 // west wall
@@ -222,10 +301,16 @@ void World::build(const TexSet& tex) {
     cx.ledgeEdges(-4, 12, 0, 16, 0.9f);
     cx.ledgeEdges(-21.2f, 19.6f, -19, 20.4f, 0.42f);
     cx.ledgeEdges(7, 29.6f, 9.2f, 30.4f, 0.42f);
+    cx.ledgeEdges(7.2f, -22.6f, 8.8f, -21.4f, 0.72f);
     cx.ledgeEdges(-49, -9, -47, -7.6f, 0.8f);
     cx.ledgeEdges(19, 35.4f, 21, 36.8f, 0.8f);
     edges.push_back({{-19, 0.55f, 6}, {-13, 0.55f, 6}, true});             // flatbar
+    edges.push_back({{2, 0.55f, -14}, {2, 0.55f, -8}, true});              // north flatbar
     edges.push_back({{-46, 0.55f, 28}, {-40, 0.55f, 28}, true});           // lot rail
+    addHF(-26, -14, -22, -10, 1, 0.f, 0.8f);                               // kicker ramp
+    // mini ramp coping (grindable lips)
+    edges.push_back({{42, 2.52f, -38}, {42, 2.52f, -30}, false});
+    edges.push_back({{52, 2.52f, -38}, {52, 2.52f, -30}, false});
     {   // bowl coping ring
         for (int i = 0; i < 24; i++) {
             float a0 = i / 24.f * 6.2831853f, a1 = (i + 1) / 24.f * 6.2831853f;
@@ -332,6 +417,10 @@ void World::build(const TexSet& tex) {
         m.cylinder({-19, 0, 6}, {-19, 0.55f, 6}, 0.03f, 8);
         m.cylinder({-13, 0, 6}, {-13, 0.55f, 6}, 0.03f, 8);
         m.cylinder({-16, 0, 6}, {-16, 0.55f, 6}, 0.03f, 8);
+        m.cylinder({2, 0.55f, -14}, {2, 0.55f, -8}, 0.04f, 12);
+        m.cylinder({2, 0, -14}, {2, 0.55f, -14}, 0.03f, 8);
+        m.cylinder({2, 0, -8}, {2, 0.55f, -8}, 0.03f, 8);
+        m.cylinder({2, 0, -11}, {2, 0.55f, -11}, 0.03f, 8);
         m.cylinder({-46, 0.55f, 28}, {-40, 0.55f, 28}, 0.04f, 12);
         m.cylinder({-46, 0, 28}, {-46, 0.55f, 28}, 0.03f, 8);
         m.cylinder({-40, 0, 28}, {-40, 0.55f, 28}, 0.03f, 8);
@@ -347,9 +436,65 @@ void World::build(const TexSet& tex) {
         m.box({-2, 0.45f, 14}, {2, 0.45f, 2});
         m.box({-20.1f, 0.21f, 20}, {1.1f, 0.21f, 0.4f});
         m.box({8.1f, 0.21f, 30}, {1.1f, 0.21f, 0.4f});
-        for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
-            m.cylinder({p.x, 0, p.y}, {p.x, 0.55f, p.y}, 1.1f, 20);
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
+        // terracotta planters: warm color accents against the grey concrete
+        auto& pl = cx.mb();
+        pl.setColor({1, 1, 1});
+        for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
+            pl.cylinder({p.x, 0, p.y}, {p.x, 0.55f, p.y}, 1.1f, 20);
+        cx.add(pl, {tex.concrete, 0.5f, {0.72f, 0.38f, 0.25f}, 0.15f, 24.f, 1.f, 0.f, 0.f});
+    }
+    // parked cars on the asphalt lot
+    {
+        auto addCar = [&](float cx0, float cz0, const Vec3& paint) {
+            MeshBuilder m;
+            // stepped body: low hood + trunk, high mid belt, sunken glasshouse
+            m.setColor(paint);
+            m.box({cx0, 0.42f, cz0}, {0.84f, 0.26f, 2.0f});                   // main tub
+            m.box({cx0, 0.60f, cz0 - 1.45f}, {0.80f, 0.10f, 0.55f});          // hood
+            m.box({cx0, 0.58f, cz0 + 1.5f}, {0.80f, 0.12f, 0.5f});            // trunk deck
+            m.box({cx0, 0.68f, cz0}, {0.78f, 0.10f, 1.35f});                  // cabin floor/sill
+            m.setColor(paint * 0.45f + Vec3{0.04f, 0.06f, 0.08f});
+            m.box({cx0, 0.82f, cz0 + 0.05f}, {0.70f, 0.16f, 1.05f});          // glasshouse
+            m.setColor(paint);
+            m.box({cx0, 0.82f, cz0 - 1.02f}, {0.74f, 0.16f, 0.07f});          // windshield frame top
+            m.box({cx0, 0.86f, cz0 + 0.05f}, {0.72f, 0.06f, 0.9f});           // roof
+            m.setColor({0.02f, 0.02f, 0.02f});
+            for (int wsi = 0; wsi < 4; wsi++) {
+                float wx = cx0 + (wsi < 2 ? -0.78f : 0.78f);
+                float wz = cz0 + (wsi % 2 ? -1.35f : 1.35f);
+                m.cylinder({wx, 0.26f, wz - 0.14f}, {wx, 0.26f, wz + 0.14f}, 0.27f, 14);
+            }
+            m.setColor({0.9f, 0.9f, 0.95f});
+            m.box({cx0, 0.45f, cz0 - 2.02f}, {0.75f, 0.05f, 0.02f});          // headlights strip
+            m.setColor({0.5f, 0.06f, 0.04f});
+            m.box({cx0, 0.48f, cz0 + 2.02f}, {0.75f, 0.05f, 0.02f});          // taillights strip
+            cx.add(m, {0, 1.f, {1, 1, 1}, 0.9f, 140.f, 0.9f, 0.35f, 0.f}, true);
+            solids.push_back({{cx0 - 0.86f, 0, cz0 - 2.05f}, {cx0 + 0.86f, 1.05f, cz0 + 2.05f}});
+        };
+        addCar(-52, 38, {0.55f, 0.08f, 0.06f});
+        addCar(-44, 40, {0.10f, 0.14f, 0.30f});
+        addCar(-27, 45, {0.72f, 0.72f, 0.74f});
+    }
+    // kneeling filmer filming the ledge line
+    {
+        MeshBuilder fm;
+        Vec3 bp{-2.2f, 0, -6.4f};                       // base, faces the ledge
+        fm.setColor({0.30f, 0.32f, 0.36f});             // hoodie
+        fm.capsule(bp + Vec3{0, 0.72f, 0}, bp + Vec3{0, 1.18f, 0}, 0.16f, 10);   // torso
+        fm.setColor({0.16f, 0.20f, 0.28f});             // jeans
+        fm.capsule(bp + Vec3{-0.10f, 0.55f, 0.02f}, bp + Vec3{-0.10f, 0.28f, 0.34f}, 0.09f, 8); // kneel thigh L
+        fm.capsule(bp + Vec3{-0.10f, 0.28f, 0.34f}, bp + Vec3{-0.10f, 0.10f, 0.36f}, 0.07f, 8); // shin L down
+        fm.capsule(bp + Vec3{0.12f, 0.55f, -0.04f}, bp + Vec3{0.30f, 0.28f, -0.20f}, 0.09f, 8); // leg R bent
+        fm.capsule(bp + Vec3{0.30f, 0.28f, -0.20f}, bp + Vec3{0.36f, 0.06f, -0.42f}, 0.07f, 8); // shin R
+        fm.setColor({0.85f, 0.68f, 0.58f});             // skin
+        fm.sphere(bp + Vec3{0, 1.38f, 0}, 0.13f, 10, 8);
+        fm.capsule(bp + Vec3{-0.16f, 1.05f, 0.02f}, bp + Vec3{-0.06f, 1.20f, 0.42f}, 0.055f, 8); // arm L to cam
+        fm.capsule(bp + Vec3{0.16f, 1.05f, 0.02f}, bp + Vec3{0.10f, 1.20f, 0.42f}, 0.055f, 8);  // arm R
+        fm.setColor({0.05f, 0.05f, 0.07f});             // camera
+        fm.box(bp + Vec3{0.085f, 1.325f, 0.55f}, {0.065f, 0.045f, 0.11f});
+        cx.add(fm, {0, 1.f, {1, 1, 1}, 0.05f, 24.f, 1.f, 0.f, 0.f}, true);
+        solids.push_back({{bp.x - 0.3f, 0, bp.z - 0.3f}, {bp.x + 0.4f, 1.5f, bp.z + 0.5f}});
     }
     // barriers + curbs (painted)
     {
@@ -385,7 +530,41 @@ void World::build(const TexSet& tex) {
         m.setColor({1, 1, 1});
         m.bank({-6, 0, 14}, {1, 0, 0}, 4, 2, 0.9f);
         m.bank({2, 0, 14}, {-1, 0, 0}, 4, 2, 0.9f);
+        m.bank({-26, 0, -12}, {1, 0, 0}, 4, 4, 0.8f);   // kicker
         cx.add(m, {tex.concrete, 0.5f, {1,1,1}, 0.2f, 30.f, 1.f, 0.f, 0.f});
+    }
+    // picnic table (wooden top + seats, metal legs)
+    {
+        auto& m = cx.mb();
+        m.setColor({1, 1, 1});
+        m.box({8, 0.72f, -22}, {0.85f, 0.035f, 0.65f});
+        m.box({8, 0.42f, -23.05f}, {0.85f, 0.03f, 0.14f});
+        m.box({8, 0.42f, -20.95f}, {0.85f, 0.03f, 0.14f});
+        cx.add(m, {tex.wood, 0.6f, {1,1,1}, 0.25f, 40.f, 1.f, 0.f, 0.f});
+        auto& lg = cx.mb();
+        lg.setColor({1, 1, 1});
+        for (float sx : {-1.f, 1.f}) {
+            lg.cylinder({8 + 0.55f * sx, 0, -22.45f}, {8 + 0.75f * sx, 0.7f, -21.7f}, 0.035f, 8);
+            lg.cylinder({8 + 0.55f * sx, 0, -21.55f}, {8 + 0.75f * sx, 0.7f, -22.3f}, 0.035f, 8);
+        }
+        lg.cylinder({7.3f, 0.5f, -22}, {8.7f, 0.5f, -22}, 0.03f, 8);        // brace
+        cx.add(lg, {tex.metal, 0.4f, {0.7f,0.72f,0.75f}, 0.5f, 90.f, 1.f, 0.4f, 0.f});
+    }
+    // mini ramp (plywood transitions + decks + coping)
+    {
+        auto& m = cx.mb();
+        m.setColor({1, 1, 1});
+        m.quarterPipe({44.5f, 0, -34}, {-1, 0, 0}, 8, 2.5f, 12);  // west pipe
+        m.quarterPipe({49.5f, 0, -34}, {1, 0, 0}, 8, 2.5f, 12);   // east pipe
+        m.box({40.5f, 1.25f, -34}, {1.5f, 1.25f, 4});             // west deck
+        m.box({53.5f, 1.25f, -34}, {1.5f, 1.25f, 4});             // east deck
+        m.box({47, 0.06f, -34}, {2.6f, 0.06f, 4});                // flat bottom
+        cx.add(m, {tex.wood, 0.8f, {1,1,1}, 0.22f, 30.f, 1.f, 0.f, 0.f});
+        auto& cp = cx.mb();
+        cp.setColor({1, 1, 1});
+        cp.cylinder({42, 2.52f, -38}, {42, 2.52f, -30}, 0.045f, 10);
+        cp.cylinder({52, 2.52f, -38}, {52, 2.52f, -30}, 0.045f, 10);
+        cx.add(cp, {tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
     }
     // mega ramp (wooden surfaces)
     {
@@ -393,8 +572,8 @@ void World::build(const TexSet& tex) {
         m.setColor({1, 1, 1});
         m.box({53, 4, zc}, {3, 4, mw / 2});                    // tower
         m.quarterPipe({64, 0, zc}, {-1, 0, 0}, mw, 8, 18);     // roll-in
-        m.bank({69, 0, zc}, {1, 0, 0}, mw, 4, 1.4f);           // kicker
-        m.bank({91, 0, zc}, {-1, 0, 0}, mw, 12, 4.0f);         // landing
+        m.quarterPipe({69, 0, zc}, {1, 0, 0}, mw, 5.5f, 10, true, 0.81f); // kicker
+        m.bank({91, 0, zc}, {-1, 0, 0}, mw, 14, 3.0f);         // landing
         m.quarterPipe({91, 0, zc}, {1, 0, 0}, mw, 7, 18);      // big quarter
         m.box({102, 3.5f, zc}, {4, 3.5f, mw / 2});             // deck
         cx.add(m, {tex.wood, 0.5f, {1,1,1}, 0.25f, 32.f, 1.f, 0.f, 0.f});
@@ -409,25 +588,51 @@ void World::build(const TexSet& tex) {
         r.cylinder({105.8f, 8.2f, MEGA_Z0}, {105.8f, 8.2f, MEGA_Z1}, 0.05f, 8);
         cx.add(r, {tex.metal, 1.f, {0.9f,0.9f,0.92f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
     }
+    // mega ramp scaffolding: vertical posts + cross beams under the wooden
+    // surfaces — real mega ramps read as massive timber structures, not
+    // floating shells
+    {
+        auto& sc = cx.mb();
+        sc.setColor({1, 1, 1});
+        auto posts = [&](float x0, float x1, float step, float hgt) {
+            for (float x = x0; x <= x1 + 0.01f; x += step) {
+                for (float z = MEGA_Z0 + 2; z <= MEGA_Z1 - 1; z += 8) {
+                    sc.cylinder({x, 0, z}, {x, hgt, z}, 0.09f, 8);
+                }
+            }
+        };
+        posts(57, 63, 3, 5.0f);     // under the roll-in
+        posts(69.5f, 72.5f, 3, 1.6f); // under the kicker
+        posts(79, 90, 3.5f, 2.6f);  // under the landing
+        posts(92, 97, 2.5f, 5.0f);  // under the big quarter
+        cx.add(sc, {tex.wood, 1.5f, {0.55f, 0.42f, 0.3f}, 0.1f, 16.f, 1.f, 0.f, 0.f});
+    }
     // backdrop: distant city blocks + ocean
     {
-        auto& m = cx.mb();
+        // backdrop towers in three material groups for skyline variety
         unsigned sd = 42;
+        MeshBuilder groups[3];
+        for (int i = 0; i < 3; i++) groups[i].setColor({1, 1, 1});
+        auto addTower = [&](float bx, float bz, float bh, float bs, int grp) {
+            groups[grp].box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+        };
         for (int i = 0; i < 14; i++) {
             float bx = -80 + randf(sd) * 200, bz = -80 - randf(sd) * 40;
             float bh = 12 + randf(sd) * 30, bs = 8 + randf(sd) * 10;
-            m.box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+            addTower(bx, bz, bh, bs, i % 3);
         }
         for (int i = 0; i < 10; i++) {
             float bx = -80 + randf(sd) * 200, bz = 78 + randf(sd) * 40;
             float bh = 10 + randf(sd) * 26, bs = 8 + randf(sd) * 10;
-            m.box({bx, bh / 2, bz}, {bs / 2, bh / 2, bs / 2});
+            addTower(bx, bz, bh, bs, (i + 1) % 3);
         }
-        cx.add(m, {0, 1.f, {0.82f,0.84f,0.9f}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
+        cx.add(groups[0], {tex.building, 3.5f, {0.75f,0.82f,0.95f}, 0.15f, 24.f, 1.f, 0.25f, 0.f}, false); // glass towers
+        cx.add(groups[1], {tex.building, 2.6f, {1.0f,0.92f,0.80f}, 0.08f, 16.f, 1.f, 0.f, 0.f}, false);   // warm concrete
+        cx.add(groups[2], {0, 1.f, {0.82f,0.84f,0.9f}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);                // plain massing
         auto& oc = cx.mb();
         oc.setColor({0.15f, 0.4f, 0.62f});
         oc.quad({-200, -0.5f, 120}, {200, -0.5f, 120}, {200, -0.5f, 300}, {-200, -0.5f, 300}, {0, 1, 0}, 10, 10);
-        cx.add(oc, {0, 1.f, {0.15f,0.4f,0.62f}, 0.5f, 60.f, 1.f, 0.3f, 0.f}, false);
+        cx.add(oc, {tex.water, 14.f, {0.9f,0.95f,1.05f}, 0.55f, 80.f, 1.f, 0.35f, 0.f}, false);
         // boundary walls (visual)
         auto& bw = cx.mb();
         bw.setColor({1, 1, 1});
@@ -436,4 +641,80 @@ void World::build(const TexSet& tex) {
         bw.box({-73.4f, 0.5f, 8}, {0.4f, 0.5f, 56});
         cx.add(bw, {tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f});
     }
+    // lamp posts: vertical rhythm against the sky, classic plaza furniture
+    {
+        auto& lp = cx.mb();
+        lp.setColor({1, 1, 1});
+        auto lamp = [&](float x, float z) {
+            lp.cylinder({x, 0, z}, {x, 5.6f, z}, 0.07f, 10);                  // pole
+            lp.cylinder({x, 5.6f, z}, {x + 0.9f, 5.9f, z}, 0.045f, 8);       // arm
+            lp.box({x + 1.0f, 5.85f, z}, {0.28f, 0.08f, 0.14f});             // head
+        };
+        lamp(-20, -14); lamp(-20, 18); lamp(6, -18); lamp(6, 20);
+        lamp(28, -14); lamp(28, 18); lamp(-44, 0); lamp(48, 24);
+        cx.add(lp, {tex.metal, 1.f, {0.28f, 0.30f, 0.33f}, 0.7f, 70.f, 1.f, 0.5f, 0.f});
+    }
+    // sponsor-style banners on the lamp posts: color rectangles at height
+    {
+        auto& bn = cx.mb();
+        auto banner = [&](float x, float z, const Vec3& col) {
+            bn.setColor(col);
+            bn.box({x, 3.6f, z}, {0.02f, 0.9f, 0.5f});
+        };
+        banner(-20, -14, {0.85f, 0.15f, 0.2f}); banner(-20, 18, {0.1f, 0.45f, 0.85f});
+        banner(6, -18, {0.95f, 0.75f, 0.1f});   banner(6, 20, {0.15f, 0.7f, 0.3f});
+        banner(28, -14, {0.85f, 0.15f, 0.2f});  banner(28, 18, {0.1f, 0.45f, 0.85f});
+        banner(-44, 0, {0.95f, 0.75f, 0.1f});   banner(48, 24, {0.15f, 0.7f, 0.3f});
+        bn.setColor({1, 1, 1});
+        cx.add(bn, {0, 1.f, {1,1,1}, 0.1f, 12.f, 1.f, 0.f, 0.f});
+    }
+    // painted plaza medallion: big circular ground graphic at the plaza heart
+    {
+        auto& md = cx.mb();
+        md.setColor({0.15f, 0.45f, 0.75f});
+        md.cylinder({-6, 0.008f, 4}, {-6, 0.012f, 4}, 3.4f, 28);
+        md.setColor({0.9f, 0.85f, 0.75f});
+        md.cylinder({-6, 0.010f, 4}, {-6, 0.014f, 4}, 2.6f, 28);
+        md.setColor({0.85f, 0.2f, 0.15f});
+        md.cylinder({-6, 0.012f, 4}, {-6, 0.016f, 4}, 1.2f, 24);
+        cx.add(md, {0, 1.f, {1,1,1}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
+    }
+    // traffic cones: bright orange color pops scattered as skate obstacles
+    {
+        auto& cn = cx.mb();
+        cn.setColor({1, 1, 1});
+        auto cone = [&](float x, float z) {
+            cn.box({x, 0.02f, z}, {0.14f, 0.02f, 0.14f});                    // base
+            // stacked segments of decreasing radius approximate the cone taper
+            cn.cylinder({x, 0.03f, z}, {x, 0.12f, z}, 0.105f, 10);
+            cn.cylinder({x, 0.12f, z}, {x, 0.20f, z}, 0.075f, 10);
+            cn.cylinder({x, 0.20f, z}, {x, 0.27f, z}, 0.048f, 10);
+            cn.cylinder({x, 0.27f, z}, {x, 0.33f, z}, 0.026f, 10);
+        };
+        cone(-8, -2); cone(-4.5f, 3); cone(2, -6); cone(9, 8);
+        cone(20, -3); cone(-18, -7); cone(33, 6); cone(-30, 14);
+        cx.add(cn, {0, 1.f, {0.95f, 0.35f, 0.08f}, 0.25f, 30.f, 1.f, 0.f, 0.f});
+    }
+    // graffiti decals: spray-painted tags layered on the big flat concrete/
+    // wood walls — the Port Carverton vibe lives on these
+    {
+        auto& gq = cx.mb();
+        gq.setColor({1, 1, 1});
+        // quad centered at ct, spanning w x h, in the plane perpendicular to n
+        auto decal = [&](const Vec3& ct, float wdt, float hgt, const Vec3& n) {
+            Vec3 t = (std::abs(n.y) < 0.9f ? n.cross(Vec3(0,1,0)) : n.cross(Vec3(1,0,0))).normalized();
+            Vec3 b = n.cross(t).normalized();
+            Vec3 p0 = ct - t * (wdt/2) - b * (hgt/2), p1 = ct + t * (wdt/2) - b * (hgt/2);
+            Vec3 p2 = ct + t * (wdt/2) + b * (hgt/2), p3 = ct - t * (wdt/2) + b * (hgt/2);
+            gq.quad(p0, p1, p2, p3, n, 1.f, 1.f);
+        };
+        decal({49.97f, 3.4f, 40}, 9.f, 5.f, {-1, 0, 0});      // mega tower west face
+        decal({53, 3.2f, 50.03f}, 5.f, 4.5f, {0, 0, 1});      // tower south face
+        decal({97.97f, 3.0f, 40}, 8.f, 4.5f, {-1, 0, 0});     // mega deck west face
+        decal({-3, 1.4f, 21.03f}, 6.f, 2.4f, {0, 0, 1});      // plateau wall behind ledges
+        decal({14, 1.6f, -8.03f}, 5.f, 2.6f, {0, 0, -1});     // bank wall face
+        decal({-14.03f, 1.5f, 10}, 5.5f, 2.6f, {-1, 0, 0});   // plaza west wall
+        cx.add(gq, {tex.graffiti, 1.f, {1,1,1}, 0.1f, 12.f, 1.f, 0.f, 0.f}, false);
+    }
+    cx.finish();
 }
