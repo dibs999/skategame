@@ -360,8 +360,15 @@ void World::build(const TexSet& tex) {
             }
         cx.add(m, {tex.asphalt, 1.f, {1,1,1}, 0.15f, 20.f, 1.f, 0.f, 0.f}, false);
     }
+    // Blender bowl asset replaces the procedural shell when present
+    std::map<std::string, Mesh> bowlParts;
+    bool hasBowl = loadObjParts("assets/bowl.obj", bowlParts) ||
+                   loadObjParts("../assets/bowl.obj", bowlParts);
+    static std::map<std::string, Mesh> bowlStore;
+    if (hasBowl) bowlStore = std::move(bowlParts);
+
     // bowl + rim flange
-    {
+    if (!hasBowl) {
         auto& m = cx.mb();
         m.setColor({1, 1, 1});
         m.bowl({BOWL_X, 0, BOWL_Z}, BOWL_R, BOWL_D, 56, 10);
@@ -385,6 +392,14 @@ void World::build(const TexSet& tex) {
                        {BOWL_X + std::cos(a1) * r, 0.055f, BOWL_Z + std::sin(a1) * r}, 0.05f, 6);
         }
         cx.add(c, {tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
+    }
+    if (hasBowl) {
+        for (auto& kv : bowlStore) {
+            Material mm = kv.first.rfind("concrete", 0) == 0
+                ? Material{tex.concreteBowl, 1.6f, {1,1,1}, 0.22f, 28.f, 1.f, 0.f, 0.f}
+                : Material{tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
     }
     // plateau + stairs (concrete)
     {
