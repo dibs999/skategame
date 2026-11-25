@@ -60,7 +60,18 @@ def tree(x, z, trunkh, canopyy, seed):
 random.seed(7)
 for k, (x, z) in enumerate([(-40, 10), (40, -20), (-8, 36)]):
     tree(x, z, 2.6, 3.6, 100 + k)
-for k, (x, z) in enumerate([(-60, 30), (-58, -18), (60, 10), (56, -30), (-30, 50), (20, 48)]):
+for k, (x, z) in enumerate([(-60, 30), (-58, -18), (60, 10), (56, -30), (-30, 50), (20, 48),
+                            (38, 34), (52, 44), (70, 22), (80, 8), (64, -12), (44, 40)]):
     tree(x, z, 2.9, 3.9, 200 + k)
+
+# leafy tufts inside the east planters
+for k, (x, z) in enumerate([(36, 26), (62, 4), (78, 20)]):
+    random.seed(400 + k)
+    for b in range(4):
+        ang = random.uniform(0, 6.28)
+        rr = random.uniform(0.2, 0.7)
+        sphere_blob(objects, 'leaf_canopy', x + math.cos(ang) * rr,
+                    0.9 + random.uniform(0, 0.5), z + math.sin(ang) * rr,
+                    random.uniform(0.45, 0.75), 0.22, 500 + k * 10 + b)
 
 write_obj(objects, '/home/ubuntu/repos/skategame/assets/trees.obj', 1.2)

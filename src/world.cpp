@@ -489,7 +489,7 @@ void World::build(const TexSet& tex) {
         // terracotta planters: warm color accents against the grey concrete
         auto& pl = cx.mb();
         pl.setColor({1, 1, 1});
-        for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)})
+        for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36), Vec2(36, 26), Vec2(62, 4), Vec2(78, 20)})
             pl.cylinder({p.x, 0, p.y}, {p.x, 0.55f, p.y}, 1.1f, 20);
         cx.add(pl, {tex.concrete, 0.5f, {0.72f, 0.38f, 0.25f}, 0.15f, 24.f, 1.f, 0.f, 0.f});
         // metal coping strips on ledge + manual pad edges — the defining Skate 3
@@ -633,7 +633,8 @@ void World::build(const TexSet& tex) {
         tr2.setColor({1, 1, 1});
         auto& lf2 = cx.mb();
         lf2.setColor({1, 1, 1});
-        for (auto& p : {Vec2(-60, 30), Vec2(-58, -18), Vec2(60, 10), Vec2(56, -30), Vec2(-30, 50), Vec2(20, 48)}) {
+        for (auto& p : {Vec2(-60, 30), Vec2(-58, -18), Vec2(60, 10), Vec2(56, -30), Vec2(-30, 50), Vec2(20, 48),
+                        Vec2(38, 34), Vec2(52, 44), Vec2(70, 22), Vec2(80, 8), Vec2(64, -12), Vec2(44, 40)}) {
             tr2.cylinder({p.x, 0, p.y}, {p.x, 2.9f, p.y}, 0.16f, 8);
             lf2.sphere({p.x, 3.9f, p.y}, 1.5f, 14, 10);
             for (int b = 0; b < 6; b++) {
@@ -646,6 +647,17 @@ void World::build(const TexSet& tex) {
         }
         cx.add(tr2, {tex.bark, 1.f, {1,1,1}, 0.1f, 16.f, 1.f, 0.f, 0.f});
         cx.add(lf2, {tex.leaf, 1.f, {1,1,1}, 0.15f, 20.f, 1.f, 0.f, 0.f});
+        // leafy tufts inside the east planters
+        auto& tf = cx.mb();
+        tf.setColor({1, 1, 1});
+        for (auto& p : {Vec2(36, 26), Vec2(62, 4), Vec2(78, 20)}) {
+            for (int b = 0; b < 4; b++) {
+                float ang = randf(sd) * 6.28f, rr = 0.2f + randf(sd) * 0.5f;
+                tf.sphere({p.x + std::cos(ang) * rr, 0.9f + randf(sd) * 0.5f, p.y + std::sin(ang) * rr},
+                          0.45f + randf(sd) * 0.3f, 10, 7);
+            }
+        }
+        cx.add(tf, {tex.leaf, 1.f, {1,1,1}, 0.15f, 20.f, 1.f, 0.f, 0.f});
     }
     // funbox banks
     {
