@@ -401,13 +401,19 @@ void World::build(const TexSet& tex) {
             items.push_back({&kv.second, Mat4(), mm, true});
         }
     }
+    // Blender stair set asset replaces the procedural shells when present
+    std::map<std::string, Mesh> stairParts;
+    bool hasStairs = loadObjParts("assets/stairs.obj", stairParts) ||
+                     loadObjParts("../assets/stairs.obj", stairParts);
+    static std::map<std::string, Mesh> stairStore;
+    if (hasStairs) stairStore = std::move(stairParts);
     // plateau + stairs (concrete)
     {
         auto& m = cx.mb();
         m.setColor({1, 1, 1});
         m.box({(PLAT_X0 + PLAT_X1) / 2, PLAT_H / 2, (PLAT_Z0 + PLAT_Z1) / 2},
               {(PLAT_X1 - PLAT_X0) / 2, PLAT_H / 2, (PLAT_Z1 - PLAT_Z0) / 2});
-        for (int i = 0; i < 5; i++) {
+        if (!hasStairs) for (int i = 0; i < 5; i++) {
             float zA = STAIR_Z0 + i * STAIR_D, top = PLAT_H - (i + 1) * 0.25f;
             m.box({(STAIR_X0 + STAIR_X1) / 2, top / 2, zA + STAIR_D / 2},
                   {(STAIR_X1 - STAIR_X0) / 2, top / 2, STAIR_D / 2});
@@ -418,12 +424,21 @@ void World::build(const TexSet& tex) {
     {
         auto& hb = cx.mb();
         hb.setColor({1, 1, 1});
-        for (int i = 0; i < 6; i++) {
+        if (!hasStairs) for (int i = 0; i < 6; i++) {
             float zA = STAIR_Z0 + i * STAIR_D, top = PLAT_H + 0.22f - i * 0.25f;
             hb.box({STAIR_X0 - 0.675f, top / 2, zA + STAIR_D / 2}, {0.625f, top / 2, STAIR_D / 2});
             hb.box({STAIR_X1 + 0.675f, top / 2, zA + STAIR_D / 2}, {0.625f, top / 2, STAIR_D / 2});
         }
         cx.add(hb, {tex.curbPaint, 0.6f, {1,1,1}, 0.3f, 40.f, 1.f, 0.05f, 0.f});
+    }
+    if (hasStairs) {
+        for (auto& kv : stairStore) {
+            Material mm{tex.concrete, 0.4f, {1,1,1}, 0.18f, 24.f, 1.f, 0.f, 0.f};
+            if (kv.first == "paint_hubba") mm = Material{tex.curbPaint, 0.6f, {1,1,1}, 0.3f, 40.f, 1.f, 0.05f, 0.f};
+            else if (kv.first == "metal_rail") mm = Material{tex.metal, 1.f, {0.9f,0.92f,0.95f}, 0.9f, 90.f, 1.f, 0.8f, 0.f};
+            else if (kv.first == "concrete_nosing") mm.color = {0.7f, 0.7f, 0.68f};
+            items.push_back({&kv.second, Mat4(), mm, true});
+        }
     }
     // rails (metal)
     {
@@ -435,7 +450,7 @@ void World::build(const TexSet& tex) {
             m.cylinder({x, 0, 4.0f}, {x, 0.7f, 4.0f}, 0.03f, 8);
             m.cylinder({x, 0, -1.2f}, {x, 1.5f, -1.2f}, 0.03f, 8);
         };
-        rail(18); rail(16.6f);
+        if (!hasStairs) { rail(18); rail(16.6f); }
         m.cylinder({-19, 0.55f, 6}, {-13, 0.55f, 6}, 0.04f, 12);
         m.cylinder({-19, 0, 6}, {-19, 0.55f, 6}, 0.03f, 8);
         m.cylinder({-13, 0, 6}, {-13, 0.55f, 6}, 0.03f, 8);
