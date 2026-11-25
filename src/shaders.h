@@ -56,7 +56,7 @@ out vec4 fragColor;
 float shadowPCF(vec4 sc){
     vec3 p = sc.xyz / sc.w * 0.5 + 0.5;
     if(p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
-    float bias = max(0.0018, 0.004 * (1.0 - abs(vNormal.y)));
+    float bias = max(0.0026, 0.006 * (1.0 - abs(vNormal.y)));
     float sum = 0.0;
     vec2 ts = vec2(1.0/2048.0);
     for(int x=-1;x<=1;x++)
