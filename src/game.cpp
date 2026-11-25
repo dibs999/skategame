@@ -966,6 +966,12 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     for (int ft = 0; ft < 2; ft++) {
         Vec3 fp = ft == 0 ? footL : footR;
         float ry = s.yaw + (ft == 0 ? 0.15f : -0.15f);
+        if (hasSkaterMesh) {
+            // mesh shoe: origin at ankle top, toe +z — orient along foot yaw
+            Mat4 base = Mat4::translation(fp + Vec3(0, 0.09f, 0)) * Mat4::rotateY(ry + 1.5708f);
+            out.push_back({&skaterParts.at("shoe"), Mat4::mul(base, Mat4::scale({1.15f, 1.15f, 1.15f})), shoe});
+            continue;
+        }
         // gum sole + white upper
         Mat4 so = Mat4::translation(fp + Vec3(0, 0.012f, 0)) * Mat4::rotateY(ry);
         out.push_back({&mBox, Mat4::mul(so, Mat4::scale({0.29f, 0.028f, 0.115f})), sole});
