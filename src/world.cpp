@@ -518,9 +518,15 @@ void World::build(const TexSet& tex) {
         lf.setColor({1, 1, 1});
         unsigned sd = 9;
         for (auto& p : {Vec2(-40, 10), Vec2(40, -20), Vec2(-8, 36)}) {
-            lf.sphere({p.x, 3.6f, p.y}, 1.5f, 12, 8);
-            lf.sphere({p.x + 0.8f * (randf(sd) - 0.3f), 3.0f, p.y + 0.6f * randf(sd)}, 1.0f, 10, 7);
-            lf.sphere({p.x - 0.7f * randf(sd), 4.2f, p.y - 0.5f * randf(sd)}, 0.9f, 10, 7);
+            // irregular canopy cluster: several offset blobs at varied heights/sizes
+            lf.sphere({p.x, 3.7f, p.y}, 1.35f, 14, 10);
+            for (int b = 0; b < 6; b++) {
+                float ang = randf(sd) * 6.28f, rr = 0.5f + randf(sd) * 0.85f;
+                float bx = p.x + std::cos(ang) * rr, bz = p.y + std::sin(ang) * rr;
+                float by = 3.1f + randf(sd) * 1.5f;
+                float br = 0.55f + randf(sd) * 0.6f;
+                lf.sphere({bx, by, bz}, br, 10, 7);
+            }
         }
         cx.add(lf, {tex.leaf, 1.f, {1,1,1}, 0.15f, 20.f, 1.f, 0.f, 0.f});
         // extra free-standing trees softening the lot edges
@@ -530,9 +536,14 @@ void World::build(const TexSet& tex) {
         lf2.setColor({1, 1, 1});
         for (auto& p : {Vec2(-60, 30), Vec2(-58, -18), Vec2(60, 10), Vec2(56, -30), Vec2(-30, 50), Vec2(20, 48)}) {
             tr2.cylinder({p.x, 0, p.y}, {p.x, 2.9f, p.y}, 0.16f, 8);
-            lf2.sphere({p.x, 3.9f, p.y}, 1.7f, 12, 8);
-            lf2.sphere({p.x + 0.8f * (randf(sd) - 0.3f), 3.2f, p.y + 0.6f * randf(sd)}, 1.1f, 10, 7);
-            lf2.sphere({p.x - 0.7f * randf(sd), 4.5f, p.y - 0.5f * randf(sd)}, 0.95f, 10, 7);
+            lf2.sphere({p.x, 3.9f, p.y}, 1.5f, 14, 10);
+            for (int b = 0; b < 6; b++) {
+                float ang = randf(sd) * 6.28f, rr = 0.5f + randf(sd) * 0.9f;
+                float bx = p.x + std::cos(ang) * rr, bz = p.y + std::sin(ang) * rr;
+                float by = 3.2f + randf(sd) * 1.6f;
+                float br = 0.6f + randf(sd) * 0.65f;
+                lf2.sphere({bx, by, bz}, br, 10, 7);
+            }
         }
         cx.add(tr2, {tex.bark, 1.f, {1,1,1}, 0.1f, 16.f, 1.f, 0.f, 0.f});
         cx.add(lf2, {tex.leaf, 1.f, {1,1,1}, 0.15f, 20.f, 1.f, 0.f, 0.f});
