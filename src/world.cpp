@@ -331,13 +331,19 @@ void World::build(const TexSet& tex) {
     // ---- ground + asphalt lot ----
     {
         auto& m = cx.mb();
-        m.setColor({1, 1, 1});
         const float x0 = -74, x1 = 106, z0 = -48, z1 = 64, st = 2.f;
         const float holeR = BOWL_R + 1.6f;
         for (float x = x0; x < x1; x += st)
             for (float z = z0; z < z1; z += st) {
                 float mx = x + st / 2, mz = z + st / 2;
                 if (std::hypot(mx - BOWL_X, mz - BOWL_Z) < holeR) continue;
+                // large-scale patchwork tinting: big soft tonal zones so the plain
+                // does not read as one uniform sheet from any distance
+                float pn = std::sin(mx * 0.061f + 2.0f) * std::sin(mz * 0.053f + 0.7f)
+                         + 0.6f * std::sin(mx * 0.021f + mz * 0.017f + 4.0f);
+                float tone = 0.92f + 0.08f * clampf(pn * 0.5f + 0.5f, 0.f, 1.f);
+                float warm = 1.f + 0.03f * std::sin(mx * 0.013f - mz * 0.011f);
+                m.setColor({tone * warm, tone, tone * (2 - warm) * 0.995f});
                 unsigned a = m.vert({x, 0, z}, {0, 1, 0}, x * 0.22f, z * 0.22f);
                 unsigned b = m.vert({x + st, 0, z}, {0, 1, 0}, (x + st) * 0.22f, z * 0.22f);
                 unsigned c = m.vert({x + st, 0, z + st}, {0, 1, 0}, (x + st) * 0.22f, (z + st) * 0.22f);
