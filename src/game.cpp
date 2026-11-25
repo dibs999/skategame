@@ -928,10 +928,11 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
         hipPos = s.pos + Vec3(0, 0.3f + 0.1f * std::sin(sp * 2.f), 0);
     }
     Vec3 bodyUp(0, 1, 0);
-    Vec3 leanF = f * (cr * 0.10f + (air ? 0.02f : 0.f)) + rgt * (s.lean * 0.12f);
+    Vec3 leanF = f * (cr * 0.10f + (air ? 0.02f : 0.f)) + rgt * (s.lean * 0.21f);
     if (s.state == S_GRIND) leanF = leanF + rgt * (s.balance * 0.1f);
     if (s.state == S_MANUAL) leanF = leanF - f * (0.14f * s.manualDir) + rgt * (s.balance * 0.06f);
     if (bail_) leanF = f * 0.6f + rgt * 0.3f;
+    hipPos = hipPos + rgt * (s.lean * 0.05f);
     Vec3 neck = hipPos + bodyUp * 0.46f + leanF;
     Vec3 head = neck + bodyUp * 0.17f;
 
@@ -1032,6 +1033,7 @@ void Game::drawSkater(std::vector<DrawItem>& out) const {
     } else {
         float swing = s.pushAnim > 0 ? std::sin((1 - s.pushAnim / 0.75f) * 6.28f) * 0.3f : 0;
         float outAmt = 0.22f + std::abs(s.lean) * 0.35f +
+                       (air ? 0.16f + std::min(std::abs(s.spinAmt) * 0.1f, 0.15f) : 0.f) +
                        (s.state == S_GRIND ? 0.15f : 0) + (s.state == S_MANUAL ? 0.22f : 0);
         handL = shoL + (rgt * -outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.02f + swing);
         handR = shoR + (rgt * outAmt) + Vec3(0, -0.38f + cr * -0.02f, 0) + f * (0.0f - swing);
