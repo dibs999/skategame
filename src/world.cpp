@@ -583,6 +583,25 @@ void World::build(const TexSet& tex) {
         r.cylinder({105.8f, 8.2f, MEGA_Z0}, {105.8f, 8.2f, MEGA_Z1}, 0.05f, 8);
         cx.add(r, {tex.metal, 1.f, {0.9f,0.9f,0.92f}, 0.9f, 90.f, 1.f, 0.8f, 0.f});
     }
+    // mega ramp scaffolding: vertical posts + cross beams under the wooden
+    // surfaces — real mega ramps read as massive timber structures, not
+    // floating shells
+    {
+        auto& sc = cx.mb();
+        sc.setColor({1, 1, 1});
+        auto posts = [&](float x0, float x1, float step, float hgt) {
+            for (float x = x0; x <= x1 + 0.01f; x += step) {
+                for (float z = MEGA_Z0 + 2; z <= MEGA_Z1 - 1; z += 8) {
+                    sc.cylinder({x, 0, z}, {x, hgt, z}, 0.09f, 8);
+                }
+            }
+        };
+        posts(57, 63, 3, 5.0f);     // under the roll-in
+        posts(69.5f, 72.5f, 3, 1.6f); // under the kicker
+        posts(79, 90, 3.5f, 2.6f);  // under the landing
+        posts(92, 97, 2.5f, 5.0f);  // under the big quarter
+        cx.add(sc, {tex.wood, 1.5f, {0.55f, 0.42f, 0.3f}, 0.1f, 16.f, 1.f, 0.f, 0.f});
+    }
     // backdrop: distant city blocks + ocean
     {
         // backdrop towers in three material groups for skyline variety
