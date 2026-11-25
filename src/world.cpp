@@ -929,6 +929,23 @@ void World::build(const TexSet& tex) {
         ring(0.0f, 1.2f, {0.85f, 0.2f, 0.15f});
         cx.add(md, {0, 1.f, {1,1,1}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
     }
+    // painted lane stripes: bold color bands crossing the plaza like skate-park art
+    {
+        auto& ps = cx.mb();
+        auto band = [&](float x0, float z0, float x1, float z1, float wdt, const Vec3& col) {
+            ps.setColor(col);
+            float dx = x1 - x0, dz = z1 - z0, L = std::sqrt(dx * dx + dz * dz);
+            float nx = -dz / L * wdt / 2, nz = dx / L * wdt / 2;
+            Vec3 p0{x0 + nx, 0.025f, z0 + nz}, p1{x0 - nx, 0.025f, z0 - nz};
+            Vec3 p2{x1 - nx, 0.025f, z1 - nz}, p3{x1 + nx, 0.025f, z1 + nz};
+            ps.quad(p0, p1, p2, p3, {0, 1, 0}, 1.f, 1.f);
+        };
+        band(-30, -6, -8, -18, 1.6f, {0.85f, 0.55f, 0.1f});   // ochre diagonal
+        band(-30, -4, -8, -16, 0.5f, {0.9f, 0.9f, 0.88f});    // thin white companion
+        band(20, 12, 44, 30, 1.8f, {0.2f, 0.5f, 0.7f});       // blue east lane
+        band(20, 14, 44, 32, 0.5f, {0.9f, 0.9f, 0.88f});
+        cx.add(ps, {0, 1.f, {1,1,1}, 0.05f, 8.f, 1.f, 0.f, 0.f}, false);
+    }
     // traffic cones: bright orange color pops scattered as skate obstacles
     {
         auto& cn = cx.mb();
